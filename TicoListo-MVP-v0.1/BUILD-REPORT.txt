@@ -1,0 +1,12 @@
+TicoListo MVP v0.1
+Package: cr.ticolisto.app
+Version code: 1
+minSdk: 23
+targetSdk: 29 (MVP sideload compatibility with v1 JAR/APK signature in this constrained build environment)
+APK: TicoListo-MVP-v0.1.apk
+Size: 16867 bytes
+SHA-256: 4f0d330e66de31b67a7968c1fcc52d9177e719837fe5c38dce99372c8398d1bd
+DEX size: 1072 bytes
+Manifest size: 1436 bytes
+Signature verification: PASS (jarsigner)
+Note: This is a test-signed sideload MVP, not a Google Play production build.
