@@ -4,11 +4,24 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        forest: "#0b6e4f",
-        ink: "#17231e",
-        cream: "#f7f6f1",
-        mint: "#e4f1eb",
-        gold: "#f2c86b",
+        brand: {
+          100: "#F4F6F9",
+          200: "#E9ECEF",
+          300: "#22C55E",
+          400: "#22C55E",
+          500: "#0284C7",
+          600: "#0284C7",
+          700: "#0284C7",
+          800: "#0284C7",
+          900: "#0284C7",
+          950: "#0284C7",
+          DEFAULT: "#0284C7",
+        },
+        forest: "#0284C7",
+        ink: "#0284C7",
+        cream: "#F8F9FA",
+        mint: "#F4F6F9",
+        gold: "#22C55E",
       },
       fontFamily: {
         display: ["Georgia", "serif"],
