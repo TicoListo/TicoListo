@@ -88,6 +88,50 @@ class AssistanceRequestOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+DEFAULT_SERVICES = [
+    {
+        "slug": "airport-transfer",
+        "category": "transport",
+        "name_en": "Airport transfer",
+        "name_es": "Transporte desde el aeropuerto",
+        "description_en": "Safe, private transportation from Juan Santamaría airport.",
+        "description_es": "Transporte privado y seguro desde el aeropuerto Juan Santamaría.",
+        "location": "San José · Airport",
+        "whatsapp": None,
+    },
+    {
+        "slug": "paperwork-help",
+        "category": "paperwork",
+        "name_en": "Help with paperwork",
+        "name_es": "Asistencia con trámites",
+        "description_en": "Understand the next steps for local paperwork without the jargon.",
+        "description_es": "Entiende los siguientes pasos para tus trámites locales.",
+        "location": "All Costa Rica",
+        "whatsapp": None,
+    },
+    {
+        "slug": "housing-guidance",
+        "category": "housing",
+        "name_en": "Housing guidance",
+        "name_es": "Orientación para vivienda",
+        "description_en": "Get help reviewing a rental, neighborhood or basic services.",
+        "description_es": "Recibe ayuda para revisar un alquiler, barrio o servicios básicos.",
+        "location": "San José · Guanacaste",
+        "whatsapp": None,
+    },
+    {
+        "slug": "health-navigation",
+        "category": "health",
+        "name_en": "Health navigation",
+        "name_es": "Orientación de salud",
+        "description_en": "Find the right channel for non-emergency health assistance.",
+        "description_es": "Encuentra el canal adecuado para asistencia de salud no urgente.",
+        "location": "All Costa Rica",
+        "whatsapp": None,
+    },
+]
+
+
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
         yield session
@@ -106,6 +150,11 @@ app.add_middleware(
 async def startup() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+    async with SessionLocal() as session:
+        has_services = await session.scalar(select(Service.id).limit(1))
+        if has_services is None:
+            session.add_all(Service(**service) for service in DEFAULT_SERVICES)
+            await session.commit()
 
 
 @app.get("/health")

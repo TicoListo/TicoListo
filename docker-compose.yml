@@ -16,7 +16,7 @@ services:
       retries: 10
 
   api:
-    build: ./api
+    build: ./backend
     environment:
       DATABASE_URL: postgresql+asyncpg://ticolisto:ticolisto@db:5432/ticolisto
       CORS_ORIGINS: http://localhost:3000
@@ -38,7 +38,7 @@ services:
       retries: 10
 
   web:
-    build: ./web
+    build: ./frontend
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:8000
     ports:
