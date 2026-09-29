@@ -1,5 +1,6 @@
 from enum import Enum
 from datetime import datetime
+from uuid import uuid4
 from pathlib import Path
 from typing import AsyncGenerator
 from urllib.request import Request as UrlRequest, urlopen
@@ -79,6 +80,7 @@ class AssistanceRequest(Base):
     tags: Mapped[str] = mapped_column(Text, default="")
     consent: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    chat_token: Mapped[str] = mapped_column(String(64), unique=True, index=True, default=lambda: uuid4().hex)
 
 
 class Guide(Base):
@@ -100,6 +102,7 @@ class RequestMessage(Base):
     request_id: Mapped[int] = mapped_column(index=True)
     author: Mapped[str] = mapped_column(String(120))
     message: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class RequestDocument(Base):
@@ -181,6 +184,7 @@ class AssistanceRequestOut(BaseModel):
     tags: list[str] = []
     consent: bool = False
     created_at: datetime
+    chat_token: str | None = None
 
     @field_validator("tags", mode="before")
     @classmethod
@@ -227,6 +231,18 @@ class MessageOut(BaseModel):
     author: str
     message: str
 
+    model_config = {"from_attributes": True}
+
+
+class ChatMessageIn(BaseModel):
+    message: str = Field(min_length=1, max_length=5000)
+
+
+class ChatMessageOut(BaseModel):
+    id: int
+    author: str
+    message: str
+    created_at: datetime | None = None
     model_config = {"from_attributes": True}
 
 
@@ -438,6 +454,10 @@ async def startup() -> None:
         await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT ''"))
         await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS consent BOOLEAN DEFAULT FALSE"))
         await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()"))
+        await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS chat_token VARCHAR(64)"))
+        await connection.execute(text("UPDATE assistance_requests SET chat_token = md5(random()::text || clock_timestamp()::text) WHERE chat_token IS NULL"))
+        await connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_assistance_requests_chat_token ON assistance_requests (chat_token)"))
+        await connection.execute(text("ALTER TABLE request_messages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()"))
     async with SessionLocal() as session:
         existing_slugs = set((await session.scalars(select(Service.slug))).all())
         missing_services = [
@@ -543,6 +563,33 @@ async def get_request(request_id: int, session: AsyncSession = Depends(get_sessi
     if request is None:
         raise HTTPException(status_code=404, detail="Assistance request not found")
     return request
+
+
+@app.get("/chat/{chat_token}", response_model=list[ChatMessageOut])
+async def public_chat_messages(chat_token: str, session: AsyncSession = Depends(get_session)) -> list[RequestMessage]:
+    request = await session.scalar(select(AssistanceRequest).where(AssistanceRequest.chat_token == chat_token))
+    if request is None:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    query = select(RequestMessage).where(RequestMessage.request_id == request.id).order_by(RequestMessage.id)
+    return list((await session.scalars(query)).all())
+
+
+@app.post("/chat/{chat_token}", response_model=ChatMessageOut, status_code=201)
+async def public_chat_message(
+    chat_token: str,
+    payload: ChatMessageIn,
+    session: AsyncSession = Depends(get_session),
+) -> RequestMessage:
+    request = await session.scalar(select(AssistanceRequest).where(AssistanceRequest.chat_token == chat_token))
+    if request is None:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    message = RequestMessage(request_id=request.id, author="Cliente", message=payload.message)
+    session.add(message)
+    if request.status == RequestStatus.new.value:
+        request.status = RequestStatus.contacted.value
+    await session.commit()
+    await session.refresh(message)
+    return message
 
 
 @app.get("/admin/assistance-requests", response_model=list[AssistanceRequestOut], dependencies=[Depends(require_admin)])

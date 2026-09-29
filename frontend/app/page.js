@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createAssistanceRequest, getServices } from "./lib/api";
+import { createAssistanceRequest, getChatMessages, getServices, sendChatMessage } from "./lib/api";
 
 const fallbackServices = [
   { icon: "🚕", category: "transport", title: "Airport transfer", es: "Transporte desde el aeropuerto", text: "Safe, private transportation from Juan Santamaría airport.", provider: "TicoListo concierge" },
@@ -102,6 +102,10 @@ export default function Home() {
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantStep, setAssistantStep] = useState(0);
   const [province, setProvince] = useState("");
+  const [chatToken, setChatToken] = useState("");
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatDraft, setChatDraft] = useState("");
+  const [chatSending, setChatSending] = useState(false);
   const es = language === "es";
   const selectedInstructions = selected ? getInstructions(selected) : null;
 
@@ -137,18 +141,42 @@ export default function Home() {
     setError("");
     const form = new FormData(event.currentTarget);
     try {
-      await createAssistanceRequest({
+      const created = await createAssistanceRequest({
         name: form.get("name"), email: form.get("email"), phone: form.get("phone"),
         location: form.get("location"), province: form.get("province"), category: form.get("category"), description: form.get("description"),
         consent: form.get("consent") === "on",
       });
       setSent(true);
+      setChatToken(created.chat_token || "");
       setContactNote("");
       event.currentTarget.reset();
     } catch (submissionError) {
       setError(submissionError.message);
     } finally {
       setSubmitting(false);
+    }
+
+    useEffect(() => {
+      if (!chatToken) return undefined;
+      const load = () => getChatMessages(chatToken).then(setChatMessages).catch(() => {});
+      load();
+      const timer = window.setInterval(load, 10000);
+      return () => window.clearInterval(timer);
+    }, [chatToken]);
+
+    async function handleChatSubmit(event) {
+      event.preventDefault();
+      if (!chatDraft.trim() || !chatToken) return;
+      setChatSending(true);
+      try {
+        const message = await sendChatMessage(chatToken, chatDraft.trim());
+        setChatMessages((items) => [...items, message]);
+        setChatDraft("");
+      } catch (chatError) {
+        setError(chatError.message);
+      } finally {
+        setChatSending(false);
+      }
     }
   }
 
@@ -213,7 +241,7 @@ export default function Home() {
 
       <section className="assistance" id="assistance">
         <div><p className="eyebrow">TICOLISTO CONCIERGE</p><h2>{es ? "¿No encuentras lo que buscas?" : "Can't find what you need?"}</h2><p>{es ? "Cuéntanos qué necesitas y te ayudamos a ordenar los siguientes pasos." : "Tell us what you need and we'll help you find the next step."}</p></div>
-        {sent ? <div className="success" role="status">✓ {es ? "Solicitud recibida. Te contactaremos pronto." : "Request received. We will contact you soon."}</div> : <form onSubmit={handleSubmit}><input name="name" required minLength="2" placeholder={es ? "Tu nombre" : "Your name"} /><input name="email" required type="email" placeholder={es ? "Tu correo" : "Your email"} /><input name="phone" required minLength="7" placeholder={es ? "Tu teléfono" : "Your phone"} /><input name="location" required placeholder={es ? "Tu ubicación" : "Your location"} /><select name="province" value={province} onChange={(event) => setProvince(event.target.value)} required><option value="">Provincia</option>{["San José","Alajuela","Cartago","Heredia","Guanacaste","Puntarenas","Limón"].map((item) => <option key={item}>{item}</option>)}</select><select name="category" defaultValue="general"><option value="general">{es ? "Consulta general" : "General inquiry"}</option><option value="paperwork">{es ? "Trámites" : "Paperwork"}</option><option value="vehicles">{es ? "Vehículos" : "Vehicles"}</option></select><textarea name="description" required minLength="10" value={contactNote} onChange={(event) => setContactNote(event.target.value)} placeholder={es ? "¿En qué podemos ayudarte?" : "How can we help?"} /><label className="consent-check"><input name="consent" type="checkbox" required />Acepto que TicoListo use estos datos para gestionar mi solicitud.</label><button className="primary" type="submit" disabled={submitting}>{submitting ? (es ? "Enviando..." : "Sending...") : (es ? "Enviar solicitud" : "Send request")} →</button>{error && <p className="form-error" role="alert">{error}</p>}</form>}
+        {sent ? <div className="success" role="status">✓ {es ? "Solicitud recibida. Te contactaremos pronto." : "Request received. We will contact you soon."}{chatToken && <div className="client-chat"><h3>💬 Chat con tu gestor</h3><p>Escribe aquí para dar seguimiento a tu solicitud. La conversación se actualiza automáticamente.</p><div className="chat-messages">{chatMessages.map((item) => <div className={item.author === "Cliente" ? "chat-message mine" : "chat-message"} key={item.id}><strong>{item.author}</strong><span>{item.message}</span></div>)}</div><form onSubmit={handleChatSubmit} className="chat-form"><input value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} placeholder="Escribe un mensaje..." /><button className="primary" disabled={chatSending}>{chatSending ? "..." : "Enviar"}</button></form></div>}</div> : <form onSubmit={handleSubmit}><input name="name" required minLength="2" placeholder={es ? "Tu nombre" : "Your name"} /><input name="email" required type="email" placeholder={es ? "Tu correo" : "Your email"} /><input name="phone" required minLength="7" placeholder={es ? "Tu teléfono" : "Your phone"} /><input name="location" required placeholder={es ? "Tu ubicación" : "Your location"} /><select name="province" value={province} onChange={(event) => setProvince(event.target.value)} required><option value="">Provincia</option>{["San José","Alajuela","Cartago","Heredia","Guanacaste","Puntarenas","Limón"].map((item) => <option key={item}>{item}</option>)}</select><select name="category" defaultValue="general"><option value="general">{es ? "Consulta general" : "General inquiry"}</option><option value="paperwork">{es ? "Trámites" : "Paperwork"}</option><option value="vehicles">{es ? "Vehículos" : "Vehicles"}</option></select><textarea name="description" required minLength="10" value={contactNote} onChange={(event) => setContactNote(event.target.value)} placeholder={es ? "¿En qué podemos ayudarte?" : "How can we help?"} /><label className="consent-check"><input name="consent" type="checkbox" required />Acepto que TicoListo use estos datos para gestionar mi solicitud.</label><button className="primary" type="submit" disabled={submitting}>{submitting ? (es ? "Enviando..." : "Sending...") : (es ? "Enviar solicitud" : "Send request")} →</button>{error && <p className="form-error" role="alert">{error}</p>}</form>}
       </section>
 
       <footer><span className="logo"><span className="logo-mark">T</span>TicoListo</span><span>{es ? "Una guía más clara para Costa Rica." : "A clearer guide to Costa Rica."}</span></footer>

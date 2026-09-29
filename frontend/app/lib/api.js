@@ -27,3 +27,14 @@ export function createAssistanceRequest(payload) {
     body: JSON.stringify(payload),
   });
 }
+
+export function getChatMessages(token) {
+  return request(`/chat/${encodeURIComponent(token)}`);
+}
+
+export function sendChatMessage(token, message) {
+  return request(`/chat/${encodeURIComponent(token)}`, {
+    method: "POST",
+    body: JSON.stringify({ message }),
+  });
+}
