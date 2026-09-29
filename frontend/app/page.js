@@ -28,6 +28,12 @@ const categoryLabels = {
   health: ["Salud", "Health"], housing: ["Vivienda", "Housing"],
 };
 
+const smartMatches = [
+  ["perdí mi cédula", "lost-id"], ["licencia", "renew-drivers-license"], ["pasaporte", "passport-renewal"],
+  ["abrir negocio", "business-checklist"], ["despido", "dismissal-next-steps"], ["propiedad", "buy-property"],
+  ["marchamo", "marchamo"], ["incapacidad", "ccss-sick-leave"], ["casarme", "civil-marriage"],
+];
+
 const officialPortals = {
   vehicles: ["COSEVI / Educación Vial", "https://www.educacionvial.go.cr"],
   identity: ["TSE / Registro Civil", "https://www.tse.go.cr"],
@@ -39,12 +45,41 @@ const officialPortals = {
   housing: ["Portal oficial del Gobierno", "https://www.gob.cr"],
 };
 
+const serviceOfficialDetails = {
+  "renew-drivers-license": ["COSEVI / Educación Vial", "https://www.educacionvial.go.cr"],
+  "first-drivers-license": ["COSEVI / Educación Vial", "https://www.educacionvial.go.cr"],
+  "vehicle-inspection": ["DEKRA Costa Rica", "https://www.dekra.cr"],
+  "buy-used-vehicle": ["Registro Nacional / notario", "https://www.rnpdigital.com"],
+  "sell-vehicle": ["Registro Nacional / notario", "https://www.rnpdigital.com"],
+  "lost-id": ["Tribunal Supremo de Elecciones", "https://www.tse.go.cr"],
+  "passport-renewal": ["Migración y Extranjería", "https://www.migracion.go.cr"],
+  "minor-passport": ["Migración y Extranjería", "https://www.migracion.go.cr"],
+  "registry-certificate": ["Registro Nacional", "https://www.rnpdigital.com"],
+  "buy-property": ["Registro Nacional / municipalidad / notario", "https://www.rnpdigital.com"],
+  "sell-property": ["Registro Nacional / notario", "https://www.rnpdigital.com"],
+  "short-stay-rental": ["Municipalidad / ICT / Hacienda", "https://www.ict.go.cr"],
+  "create-company": ["Notario / Registro Nacional / Hacienda", "https://www.rnpdigital.com"],
+  "tax-obligations": ["Ministerio de Hacienda / ATV", "https://www.atv.hacienda.go.cr"],
+  "municipal-license": ["Municipalidad correspondiente", "https://www.gob.cr"],
+  "health-permit": ["Ministerio de Salud", "https://www.tramitessalud.go.cr"],
+  "self-employed": ["Hacienda / CCSS", "https://www.atv.hacienda.go.cr"],
+  "dismissal-next-steps": ["Ministerio de Trabajo y Seguridad Social", "https://www.mtss.go.cr"],
+  "birth-documents": ["Registro Civil / TSE", "https://www.tse.go.cr"],
+  "civil-marriage": ["Registro Civil / notario", "https://www.tse.go.cr"],
+  "death-of-family-member": ["Registro Civil / CCSS / notario", "https://www.tse.go.cr"],
+  "minor-international-travel": ["Migración y Extranjería", "https://www.migracion.go.cr"],
+  "legal-status-certificate": ["Registro Nacional", "https://www.rnpdigital.com"],
+  marchamo: ["INS / entidades recaudadoras autorizadas", "https://www.ins-cr.com"],
+  "business-checklist": ["Municipalidad / Hacienda / Salud", "https://vui.cr"],
+  "ccss-sick-leave": ["Caja Costarricense de Seguro Social", "https://edus.ccss.sa.cr"],
+};
+
 function getInstructions(service) {
-  const [institution, url] = officialPortals[service.category] || ["Institución responsable", "https://www.gob.cr"];
+  const [institution, url] = serviceOfficialDetails[service.slug] || officialPortals[service.category] || ["Institución responsable", "https://www.gob.cr"];
   return {
     institution: service.provider || institution,
     url,
-    requirements: "Documento de identificación vigente, comprobantes y requisitos específicos indicados por la institución.",
+    requirements: "Documento de identificación vigente, comprobantes y requisitos específicos indicados por la institución responsable.",
     steps: [
       "Ingresa al portal oficial y verifica los requisitos actualizados.",
       "Prepara los documentos y solicita una cita o inicia el formulario correspondiente.",
@@ -64,6 +99,9 @@ export default function Home() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [contactNote, setContactNote] = useState("");
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantStep, setAssistantStep] = useState(0);
+  const [province, setProvince] = useState("");
   const es = language === "es";
   const selectedInstructions = selected ? getInstructions(selected) : null;
 
@@ -86,6 +124,12 @@ export default function Home() {
     (category === "all" || service.category === category) &&
     `${service.title} ${service.es} ${service.text} ${service.provider || ""}`.toLowerCase().includes(query.toLowerCase())
   ), [catalog, category, query]);
+  const smartSuggestion = smartMatches.find(([term]) => query.toLowerCase().includes(term));
+
+  function openAssistant() {
+    setAssistantOpen(true);
+    setAssistantStep(1);
+  }
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -95,7 +139,8 @@ export default function Home() {
     try {
       await createAssistanceRequest({
         name: form.get("name"), email: form.get("email"), phone: form.get("phone"),
-        location: form.get("location"), category: form.get("category"), description: form.get("description"),
+        location: form.get("location"), province: form.get("province"), category: form.get("category"), description: form.get("description"),
+        consent: form.get("consent") === "on",
       });
       setSent(true);
       setContactNote("");
@@ -133,6 +178,8 @@ export default function Home() {
             <button className="search-button" onClick={() => document.getElementById("services").scrollIntoView({ behavior: "smooth" })}>{es ? "Buscar" : "Search"}</button>
           </div>
           <p className="search-hint">{es ? "Ej.: licencia, pasaporte, propiedad, Hacienda..." : "Example: license, passport, property, taxes..."}</p>
+          <button className="assistant-trigger" onClick={openAssistant}>✨ {es ? "¿No sabes cómo buscar? Te guiamos" : "Need help choosing? Ask the assistant"}</button>
+          {smartSuggestion && <button className="smart-suggestion" onClick={() => { const match = catalog.find((item) => item.slug === smartSuggestion[1]); if (match) setSelected(match); }}>Asistente sugiere: <strong>{catalog.find((item) => item.slug === smartSuggestion[1])?.es}</strong> →</button>}
         </div>
       </section>
 
@@ -166,11 +213,12 @@ export default function Home() {
 
       <section className="assistance" id="assistance">
         <div><p className="eyebrow">TICOLISTO CONCIERGE</p><h2>{es ? "¿No encuentras lo que buscas?" : "Can't find what you need?"}</h2><p>{es ? "Cuéntanos qué necesitas y te ayudamos a ordenar los siguientes pasos." : "Tell us what you need and we'll help you find the next step."}</p></div>
-        {sent ? <div className="success" role="status">✓ {es ? "Solicitud recibida. Te contactaremos pronto." : "Request received. We will contact you soon."}</div> : <form onSubmit={handleSubmit}><input name="name" required minLength="2" placeholder={es ? "Tu nombre" : "Your name"} /><input name="email" required type="email" placeholder={es ? "Tu correo" : "Your email"} /><input name="phone" required minLength="7" placeholder={es ? "Tu teléfono" : "Your phone"} /><input name="location" required placeholder={es ? "Tu ubicación" : "Your location"} /><select name="category" defaultValue="general"><option value="general">{es ? "Consulta general" : "General inquiry"}</option><option value="paperwork">{es ? "Trámites" : "Paperwork"}</option><option value="vehicles">{es ? "Vehículos" : "Vehicles"}</option></select><textarea name="description" required minLength="10" value={contactNote} onChange={(event) => setContactNote(event.target.value)} placeholder={es ? "¿En qué podemos ayudarte?" : "How can we help?"} /><button className="primary" type="submit" disabled={submitting}>{submitting ? (es ? "Enviando..." : "Sending...") : (es ? "Enviar solicitud" : "Send request")} →</button>{error && <p className="form-error" role="alert">{error}</p>}</form>}
+        {sent ? <div className="success" role="status">✓ {es ? "Solicitud recibida. Te contactaremos pronto." : "Request received. We will contact you soon."}</div> : <form onSubmit={handleSubmit}><input name="name" required minLength="2" placeholder={es ? "Tu nombre" : "Your name"} /><input name="email" required type="email" placeholder={es ? "Tu correo" : "Your email"} /><input name="phone" required minLength="7" placeholder={es ? "Tu teléfono" : "Your phone"} /><input name="location" required placeholder={es ? "Tu ubicación" : "Your location"} /><select name="province" value={province} onChange={(event) => setProvince(event.target.value)} required><option value="">Provincia</option>{["San José","Alajuela","Cartago","Heredia","Guanacaste","Puntarenas","Limón"].map((item) => <option key={item}>{item}</option>)}</select><select name="category" defaultValue="general"><option value="general">{es ? "Consulta general" : "General inquiry"}</option><option value="paperwork">{es ? "Trámites" : "Paperwork"}</option><option value="vehicles">{es ? "Vehículos" : "Vehicles"}</option></select><textarea name="description" required minLength="10" value={contactNote} onChange={(event) => setContactNote(event.target.value)} placeholder={es ? "¿En qué podemos ayudarte?" : "How can we help?"} /><label className="consent-check"><input name="consent" type="checkbox" required />Acepto que TicoListo use estos datos para gestionar mi solicitud.</label><button className="primary" type="submit" disabled={submitting}>{submitting ? (es ? "Enviando..." : "Sending...") : (es ? "Enviar solicitud" : "Send request")} →</button>{error && <p className="form-error" role="alert">{error}</p>}</form>}
       </section>
 
       <footer><span className="logo"><span className="logo-mark">T</span>TicoListo</span><span>{es ? "Una guía más clara para Costa Rica." : "A clearer guide to Costa Rica."}</span></footer>
-      {selected && <div className="modal-backdrop" onClick={() => setSelected(null)}><div className="modal service-modal" onClick={(event) => event.stopPropagation()}><button className="close" onClick={() => setSelected(null)}>×</button><span className="service-icon">{selected.icon}</span><h2>{es ? selected.es : selected.title}</h2><p>{selected.text}</p><p className="service-location">{selectedInstructions.institution}</p><div className="modal-guide"><h3>{es ? "Cómo realizar este trámite" : "How to complete this process"}</h3><p><strong>{es ? "Requisitos:" : "Requirements:"}</strong> {selectedInstructions.requirements}</p><ol>{selectedInstructions.steps.map((step) => <li key={step}>{step}</li>)}</ol><a href={selectedInstructions.url} target="_blank" rel="noreferrer">{es ? "Ver portal oficial" : "Open official portal"} ↗</a></div><button className="primary" onClick={() => { setContactNote(`Necesito ayuda con: ${selected.es || selected.title}. Quiero conocer el proceso y delegarlo a su equipo.`); setSelected(null); document.getElementById("assistance").scrollIntoView({ behavior: "smooth" }); }}>{es ? "Contactarme para que me ayude" : "Contact me for help"} →</button></div></div>}
+      {assistantOpen && <div className="assistant-card"><button className="assistant-close" onClick={() => setAssistantOpen(false)}>×</button><strong>✨ Asistente de trámites</strong>{assistantStep === 1 && <><p>¿Qué necesitas resolver?</p><div className="assistant-options">{["Licencia o vehículo","Pasaporte o cédula","Propiedad o vivienda","Negocio o Hacienda"].map((option) => <button key={option} onClick={() => { setQuery(option.split(" ")[0]); setAssistantStep(2); }}>{option}</button>)}</div></>}{assistantStep === 2 && <><p>Perfecto. Busca el resultado sugerido o selecciona un trámite del catálogo. También puedes delegarlo desde su ficha.</p><button className="primary" onClick={() => { setAssistantOpen(false); document.getElementById("services").scrollIntoView({ behavior: "smooth" }); }}>Ver trámites recomendados</button></>}</div>}
+      {selected && <div className="modal-backdrop" onClick={() => setSelected(null)}><div className="modal service-modal" onClick={(event) => event.stopPropagation()}><button className="close" onClick={() => setSelected(null)}>×</button><span className="service-icon">{selected.icon}</span><h2>{es ? selected.es : selected.title}</h2><p>{selected.text}</p><p className="service-location">Institución responsable: {selectedInstructions.institution}</p><section className="modal-guide self-service"><h3>🌐 {es ? "OPCIÓN 1: HACERLO TÚ MISMO" : "OPTION 1: DO IT YOURSELF"}</h3><p><strong>{es ? "Requisitos y documentos:" : "Requirements and documents:"}</strong> {selectedInstructions.requirements}</p><ol>{selectedInstructions.steps.map((step) => <li key={step}>{step}</li>)}</ol><a className="official-link" href={selectedInstructions.url} target="_blank" rel="noopener noreferrer"><span>🔗</span><strong>{es ? "Ir al sitio oficial" : "Open official website"}</strong><small>Portal de {selectedInstructions.institution} ↗</small></a><small className="direct-url">URL directa: {selectedInstructions.url}</small></section><section className="modal-guide delegate-service"><h3>🤝 {es ? "OPCIÓN 2: ¿PREFIERES QUE LO HAGAMOS POR TI?" : "OPTION 2: LET US HANDLE IT"}</h3><p>{es ? "Si no tienes tiempo o prefieres acompañamiento, nuestro equipo puede encargarse del proceso y darle seguimiento." : "Our team can handle the process and follow up for you."}</p><button className="delegate-button" onClick={() => { setContactNote(`Necesito delegar el trámite: ${selected.es || selected.title}. Quiero conocer los requisitos y el costo de la asistencia.`); setSelected(null); document.getElementById("assistance").scrollIntoView({ behavior: "smooth" }); }}><span>💬</span><strong>{es ? "Contactar a un gestor" : "Contact a specialist"}</strong><small>Recibe acompañamiento personalizado →</small></button></section></div></div>}
     </main>
   );
 }

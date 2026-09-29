@@ -22,4 +22,15 @@ The public form uses `POST /assistance-requests`. Public guides expose the insti
 
 Available guide endpoints include `GET /guides`, `GET /guides/{slug}`, `GET /admin/assistance-requests`, `PATCH /admin/assistance-requests/{id}`, `POST /admin/assistance-requests/{id}/messages`, `GET /admin/guides` and `POST /admin/guides`.
 
+The platform also includes:
+
+- Daily official portal monitoring plus the protected `GET /admin/portals` and `POST /admin/portals/check` endpoints.
+- Operational request statuses: new, contacted, waiting documents, documents received, in progress, waiting institutional response, correction required and completed.
+- Advanced request search by name, email, phone, description, province and tags.
+- Tasks, notifications, internal tags, consent capture and protected document uploads per request.
+- Intelligent search suggestions, a guided intake assistant, province landing pages and FAQ JSON-LD.
+- A PowerShell PostgreSQL backup script: `.\scripts\backup.ps1`. Store backups outside the repository and test restoration regularly.
+
+Personal data is restricted to the protected admin API. Before production, configure HTTPS, a real identity provider, encrypted object storage, retention/deletion workflows and a privacy notice/consent policy.
+
 The frontend uses Tailwind CSS for the shared visual system. From `frontend/`, run `npm install` and `npm run dev` for local development. The full stack remains available with `docker compose up --build`.

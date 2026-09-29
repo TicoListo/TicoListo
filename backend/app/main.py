@@ -1,11 +1,18 @@
 from enum import Enum
+from datetime import datetime
+from pathlib import Path
 from typing import AsyncGenerator
+from urllib.request import Request as UrlRequest, urlopen
+from urllib.error import HTTPError, URLError
+import asyncio
+import logging
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Query
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from sqlalchemy import String, Text, select, text
+from sqlalchemy import Boolean, DateTime, String, Text, select, text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -20,6 +27,8 @@ class Settings(BaseSettings):
 settings = Settings()
 engine = create_async_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
+portal_monitor_task: asyncio.Task | None = None
+logger = logging.getLogger("ticolisto")
 
 
 class Base(DeclarativeBase):
@@ -41,11 +50,18 @@ class Service(Base):
 
 
 class RequestStatus(str, Enum):
+    new = "new"
+    contacted = "contacted"
+    waiting_documents = "waiting_documents"
+    documents_received = "documents_received"
+    in_progress = "in_progress"
+    waiting_institution = "waiting_institution"
+    correction_required = "correction_required"
+    completed = "completed"
     received = "received"
     reviewing = "reviewing"
     quoted = "quoted"
     confirmed = "confirmed"
-    completed = "completed"
 
 
 class AssistanceRequest(Base):
@@ -57,8 +73,12 @@ class AssistanceRequest(Base):
     location: Mapped[str] = mapped_column(String(180))
     category: Mapped[str] = mapped_column(String(80))
     description: Mapped[str] = mapped_column(Text)
-    status: Mapped[str] = mapped_column(String(30), default=RequestStatus.received.value)
+    status: Mapped[str] = mapped_column(String(40), default=RequestStatus.new.value)
     assigned_to: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    province: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    tags: Mapped[str] = mapped_column(Text, default="")
+    consent: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Guide(Base):
@@ -80,6 +100,44 @@ class RequestMessage(Base):
     request_id: Mapped[int] = mapped_column(index=True)
     author: Mapped[str] = mapped_column(String(120))
     message: Mapped[str] = mapped_column(Text)
+
+
+class RequestDocument(Base):
+    __tablename__ = "request_documents"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[int] = mapped_column(index=True)
+    filename: Mapped[str] = mapped_column(String(255))
+    storage_path: Mapped[str] = mapped_column(String(500))
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class Task(Base):
+    __tablename__ = "tasks"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[int] = mapped_column(index=True)
+    title: Mapped[str] = mapped_column(String(220))
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    completed: Mapped[bool] = mapped_column(Boolean, default=False)
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[int] = mapped_column(index=True)
+    channel: Mapped[str] = mapped_column(String(30), default="internal")
+    message: Mapped[str] = mapped_column(Text)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class OfficialPortal(Base):
+    __tablename__ = "official_portals"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(180))
+    url: Mapped[str] = mapped_column(String(500), unique=True)
+    status: Mapped[str] = mapped_column(String(30), default="unknown")
+    status_code: Mapped[int | None] = mapped_column(nullable=True)
+    checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class ServiceOut(BaseModel):
@@ -104,6 +162,9 @@ class AssistanceRequestIn(BaseModel):
     location: str = Field(min_length=2, max_length=180)
     category: str = Field(min_length=2, max_length=80)
     description: str = Field(min_length=10, max_length=5000)
+    province: str | None = Field(default=None, max_length=80)
+    tags: list[str] = Field(default_factory=list, max_length=20)
+    consent: bool = False
 
 
 class AssistanceRequestOut(BaseModel):
@@ -116,8 +177,23 @@ class AssistanceRequestOut(BaseModel):
     description: str
     status: RequestStatus
     assigned_to: str | None = None
+    province: str | None = None
+    tags: list[str] = []
+    consent: bool = False
+    created_at: datetime
+
+    @field_validator("tags", mode="before")
+    @classmethod
+    def split_tags(cls, value: str | list[str]) -> list[str]:
+        return value.split(",") if isinstance(value, str) and value else value or []
 
     model_config = {"from_attributes": True}
+
+    @staticmethod
+    def from_request(request: AssistanceRequest) -> "AssistanceRequestOut":
+        data = request.__dict__.copy()
+        data["tags"] = [tag for tag in request.tags.split(",") if tag]
+        return AssistanceRequestOut.model_validate(data)
 
 
 class GuideOut(BaseModel):
@@ -137,11 +213,62 @@ class GuideOut(BaseModel):
 class RequestUpdate(BaseModel):
     status: RequestStatus | None = None
     assigned_to: str | None = Field(default=None, max_length=120)
+    tags: list[str] | None = Field(default=None, max_length=20)
 
 
 class MessageIn(BaseModel):
     author: str = Field(min_length=2, max_length=120)
     message: str = Field(min_length=1, max_length=5000)
+
+
+class MessageOut(BaseModel):
+    id: int
+    request_id: int
+    author: str
+    message: str
+
+    model_config = {"from_attributes": True}
+
+
+class PortalOut(BaseModel):
+    id: int
+    name: str
+    url: str
+    status: str
+    status_code: int | None
+    checked_at: datetime | None
+    error: str | None
+    model_config = {"from_attributes": True}
+
+
+class TaskIn(BaseModel):
+    title: str = Field(min_length=2, max_length=220)
+    due_at: datetime | None = None
+
+
+class TaskOut(TaskIn):
+    id: int
+    request_id: int
+    completed: bool
+    model_config = {"from_attributes": True}
+
+
+class DocumentOut(BaseModel):
+    id: int
+    request_id: int
+    filename: str
+    storage_path: str
+    uploaded_at: datetime
+    model_config = {"from_attributes": True}
+
+
+class NotificationOut(BaseModel):
+    id: int
+    request_id: int
+    channel: str
+    message: str
+    sent_at: datetime
+    model_config = {"from_attributes": True}
 
 
 class GuideIn(BaseModel):
@@ -273,6 +400,19 @@ DEFAULT_GUIDES = [
     },
 ]
 
+DEFAULT_PORTALS = [
+    ("COSEVI / Educación Vial", "https://www.educacionvial.go.cr"),
+    ("DEKRA Costa Rica", "https://www.dekra.cr"),
+    ("Tribunal Supremo de Elecciones", "https://www.tse.go.cr"),
+    ("Migración y Extranjería", "https://www.migracion.go.cr"),
+    ("Registro Nacional", "https://www.rnpdigital.com"),
+    ("Ministerio de Hacienda / ATV", "https://www.atv.hacienda.go.cr"),
+    ("VUI / PROCOMER", "https://vui.cr"),
+    ("CCSS / EDUS", "https://edus.ccss.sa.cr"),
+    ("Ministerio de Trabajo", "https://www.mtss.go.cr"),
+    ("INS Marchamo", "https://www.ins-cr.com"),
+]
+
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
     async with SessionLocal() as session:
@@ -294,6 +434,10 @@ async def startup() -> None:
         await connection.run_sync(Base.metadata.create_all)
         await connection.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS provider VARCHAR(180)"))
         await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(120)"))
+        await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS province VARCHAR(80)"))
+        await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT ''"))
+        await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS consent BOOLEAN DEFAULT FALSE"))
+        await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()"))
     async with SessionLocal() as session:
         existing_slugs = set((await session.scalars(select(Service.slug))).all())
         missing_services = [
@@ -311,11 +455,42 @@ async def startup() -> None:
         if missing_guides:
             session.add_all(missing_guides)
             await session.commit()
+        existing_portals = set((await session.scalars(select(OfficialPortal.url))).all())
+        missing_portals = [OfficialPortal(name=name, url=url) for name, url in DEFAULT_PORTALS if url not in existing_portals]
+        if missing_portals:
+            session.add_all(missing_portals)
+            await session.commit()
+    global portal_monitor_task
+    portal_monitor_task = asyncio.create_task(portal_monitor_loop())
+
+
+async def portal_monitor_loop() -> None:
+    while True:
+        try:
+            async with SessionLocal() as session:
+                portals = list((await session.scalars(select(OfficialPortal))).all())
+                results = await asyncio.gather(*(asyncio.to_thread(check_portal, portal.url) for portal in portals))
+                now = datetime.utcnow()
+                for portal, (status, code, error) in zip(portals, results):
+                    portal.status, portal.status_code, portal.error, portal.checked_at = status, code, error, now
+                await session.commit()
+        except (OSError, RuntimeError, SQLAlchemyError) as error:
+            logger.exception("Portal monitor cycle failed: %s", error)
+        await asyncio.sleep(86400)
 
 
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+def check_portal(url: str) -> tuple[str, int | None, str | None]:
+    try:
+        request = UrlRequest(url, method="HEAD", headers={"User-Agent": "TicoListo-PortalMonitor/1.0"})
+        with urlopen(request, timeout=10) as response:
+            return ("active" if response.status < 400 else "error", response.status, None)
+    except (HTTPError, URLError, TimeoutError, OSError) as error:
+        return "error", None, str(error)[:500]
 
 
 @app.get("/services", response_model=list[ServiceOut])
@@ -353,7 +528,9 @@ async def create_request(
     payload: AssistanceRequestIn,
     session: AsyncSession = Depends(get_session),
 ) -> AssistanceRequest:
-    request = AssistanceRequest(**payload.model_dump())
+    values = payload.model_dump()
+    values["tags"] = ",".join(values["tags"])
+    request = AssistanceRequest(**values)
     session.add(request)
     await session.commit()
     await session.refresh(request)
@@ -371,11 +548,26 @@ async def get_request(request_id: int, session: AsyncSession = Depends(get_sessi
 @app.get("/admin/assistance-requests", response_model=list[AssistanceRequestOut], dependencies=[Depends(require_admin)])
 async def admin_list_requests(
     status: RequestStatus | None = Query(default=None),
+    search: str | None = Query(default=None, max_length=120),
+    province: str | None = Query(default=None, max_length=80),
+    tag: str | None = Query(default=None, max_length=80),
     session: AsyncSession = Depends(get_session),
 ) -> list[AssistanceRequest]:
     query = select(AssistanceRequest).order_by(AssistanceRequest.id.desc())
     if status:
         query = query.where(AssistanceRequest.status == status.value)
+    if search:
+        term = f"%{search}%"
+        query = query.where(
+            AssistanceRequest.name.ilike(term)
+            | AssistanceRequest.email.ilike(term)
+            | AssistanceRequest.phone.ilike(term)
+            | AssistanceRequest.description.ilike(term)
+        )
+    if province:
+        query = query.where(AssistanceRequest.province == province)
+    if tag:
+        query = query.where(AssistanceRequest.tags.ilike(f"%{tag}%"))
     return list((await session.scalars(query)).all())
 
 
@@ -391,6 +583,8 @@ async def admin_update_request(
     updates = payload.model_dump(exclude_unset=True)
     if "status" in updates and updates["status"] is not None:
         updates["status"] = updates["status"].value
+    if "tags" in updates and updates["tags"] is not None:
+        updates["tags"] = ",".join(updates["tags"])
     for key, value in updates.items():
         setattr(request, key, value)
     await session.commit()
@@ -427,3 +621,80 @@ async def admin_add_message(
     await session.commit()
     await session.refresh(message)
     return {"id": message.id}
+
+
+@app.get("/admin/portals", response_model=list[PortalOut], dependencies=[Depends(require_admin)])
+async def list_portals(session: AsyncSession = Depends(get_session)) -> list[OfficialPortal]:
+    return list((await session.scalars(select(OfficialPortal).order_by(OfficialPortal.name))).all())
+
+
+@app.post("/admin/portals/check", response_model=list[PortalOut], dependencies=[Depends(require_admin)])
+async def check_portals(session: AsyncSession = Depends(get_session)) -> list[OfficialPortal]:
+    portals = list((await session.scalars(select(OfficialPortal).order_by(OfficialPortal.id))).all())
+    results = await asyncio.gather(*(asyncio.to_thread(check_portal, portal.url) for portal in portals))
+    now = datetime.utcnow()
+    for portal, (status, code, error) in zip(portals, results):
+        portal.status, portal.status_code, portal.error, portal.checked_at = status, code, error, now
+    await session.commit()
+    return portals
+
+
+@app.get("/admin/assistance-requests/{request_id}/tasks", response_model=list[TaskOut], dependencies=[Depends(require_admin)])
+async def list_tasks(request_id: int, session: AsyncSession = Depends(get_session)) -> list[Task]:
+    query = select(Task).where(Task.request_id == request_id).order_by(Task.due_at, Task.id)
+    return list((await session.scalars(query)).all())
+
+
+@app.get("/admin/assistance-requests/{request_id}/documents", response_model=list[DocumentOut], dependencies=[Depends(require_admin)])
+async def list_documents(request_id: int, session: AsyncSession = Depends(get_session)) -> list[RequestDocument]:
+    query = select(RequestDocument).where(RequestDocument.request_id == request_id).order_by(RequestDocument.id)
+    return list((await session.scalars(query)).all())
+
+
+@app.post("/admin/assistance-requests/{request_id}/documents", response_model=DocumentOut, status_code=201, dependencies=[Depends(require_admin)])
+async def upload_document(
+    request_id: int,
+    file: UploadFile = File(...),
+    session: AsyncSession = Depends(get_session),
+) -> RequestDocument:
+    if await session.get(AssistanceRequest, request_id) is None:
+        raise HTTPException(status_code=404, detail="Assistance request not found")
+    safe_name = Path(file.filename or "document").name
+    if len(safe_name) > 255:
+        raise HTTPException(status_code=400, detail="Filename is too long")
+    storage_dir = Path("/tmp/ticolisto-documents") / str(request_id)
+    storage_dir.mkdir(parents=True, exist_ok=True)
+    destination = storage_dir / safe_name
+    destination.write_bytes(await file.read())
+    document = RequestDocument(request_id=request_id, filename=safe_name, storage_path=str(destination))
+    session.add(document)
+    await session.commit()
+    await session.refresh(document)
+    return document
+
+
+@app.post("/admin/assistance-requests/{request_id}/tasks", response_model=TaskOut, status_code=201, dependencies=[Depends(require_admin)])
+async def create_task(request_id: int, payload: TaskIn, session: AsyncSession = Depends(get_session)) -> Task:
+    if await session.get(AssistanceRequest, request_id) is None:
+        raise HTTPException(status_code=404, detail="Assistance request not found")
+    task = Task(request_id=request_id, **payload.model_dump())
+    session.add(task)
+    await session.commit()
+    await session.refresh(task)
+    return task
+
+
+@app.get("/admin/notifications", response_model=list[NotificationOut], dependencies=[Depends(require_admin)])
+async def list_notifications(session: AsyncSession = Depends(get_session)) -> list[Notification]:
+    return list((await session.scalars(select(Notification).order_by(Notification.id.desc()).limit(100))).all())
+
+
+@app.get("/admin/assistance-requests/{request_id}/messages", response_model=list[MessageOut], dependencies=[Depends(require_admin)])
+async def admin_list_messages(
+    request_id: int,
+    session: AsyncSession = Depends(get_session),
+) -> list[RequestMessage]:
+    if await session.get(AssistanceRequest, request_id) is None:
+        raise HTTPException(status_code=404, detail="Assistance request not found")
+    query = select(RequestMessage).where(RequestMessage.request_id == request_id).order_by(RequestMessage.id)
+    return list((await session.scalars(query)).all())
