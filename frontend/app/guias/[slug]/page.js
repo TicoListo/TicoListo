@@ -1,9 +1,16 @@
+import { permanentRedirect } from "next/navigation";
+
 const API_URL = process.env.API_SERVER_URL || process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 
 async function getGuide(slug) {
   const response = await fetch(`${API_URL}/guides/${slug}`, { cache: "no-store" });
   if (!response.ok) return null;
   return response.json();
+}
+
+async function getService(slug) {
+  const response = await fetch(`${API_URL}/services/es/${slug}`, { cache: "no-store" }).catch(() => null);
+  return response?.ok ? response.json() : null;
 }
 
 export async function generateMetadata({ params }) {
@@ -23,6 +30,8 @@ export async function generateMetadata({ params }) {
 
 export default async function GuidePage({ params }) {
   const guide = await getGuide(params.slug);
+  const service = await getService(params.slug);
+  if (service) permanentRedirect(`/es/servicios/${service.slug_es || service.slug}`);
   if (!guide) return <main className="page-shell"><h1>Guía no encontrada</h1></main>;
 
   const steps = guide.steps.split(/\s(?=\d+\.)/).filter(Boolean);

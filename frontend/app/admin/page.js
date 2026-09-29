@@ -10,6 +10,14 @@ const statuses = [
   ["correction_required", "Requiere corrección"], ["completed", "Finalizado"],
 ];
 const statusLabels = Object.fromEntries(statuses);
+const emptyService = {
+  slug_en: "", slug_es: "", category: "paperwork", name_en: "", name_es: "",
+  description_en: "", description_es: "", location: "Costa Rica", provider: "",
+  whatsapp: "", meta_title_en: "", meta_title_es: "", meta_description_en: "",
+  meta_description_es: "", keywords_en: "", keywords_es: "", content_en: "",
+  content_es: "", requirements_en: "", requirements_es: "", steps_en: "",
+  steps_es: "", faq_en: "[]", faq_es: "[]", official_url: "", image_url: "", published: true,
+};
 
 export default function AdminPage() {
   const [key, setKey] = useState("");
@@ -20,6 +28,10 @@ export default function AdminPage() {
   const [note, setNote] = useState("");
   const [manager, setManager] = useState("");
   const [error, setError] = useState("");
+  const [services, setServices] = useState([]);
+  const [serviceForm, setServiceForm] = useState(emptyService);
+  const [serviceEditingId, setServiceEditingId] = useState(null);
+  const [serviceNotice, setServiceNotice] = useState("");
   const selected = requests.find((item) => item.id === selectedId) || null;
 
   const visibleRequests = useMemo(
@@ -45,6 +57,14 @@ export default function AdminPage() {
     } catch (requestError) {
       setError(requestError.message);
     }
+
+    async function loadServices() {
+      try {
+        setServices(await adminFetch("/admin/services"));
+      } catch (requestError) {
+        setError(requestError.message);
+      }
+    }
   }
 
   async function loadMessages(requestId) {
@@ -61,7 +81,10 @@ export default function AdminPage() {
   }, []);
 
   useEffect(() => {
-    if (key) loadRequests();
+    if (key) {
+      loadRequests();
+      loadServices();
+    }
   }, [key]);
 
   useEffect(() => {
@@ -103,6 +126,63 @@ export default function AdminPage() {
     } catch (requestError) {
       setError(requestError.message);
     }
+
+    function editService(service) {
+      setServiceEditingId(service.id);
+      setServiceNotice("");
+      setServiceForm({
+        ...service,
+        keywords_en: service.keywords_en.join(", "),
+        keywords_es: service.keywords_es.join(", "),
+        faq_en: JSON.stringify(service.faq_en, null, 2),
+        faq_es: JSON.stringify(service.faq_es, null, 2),
+      });
+      window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+    }
+
+    function resetServiceForm() {
+      setServiceEditingId(null);
+      setServiceForm(emptyService);
+      setServiceNotice("");
+    }
+
+    function servicePayload() {
+      return {
+        ...serviceForm,
+        keywords_en: serviceForm.keywords_en.split(",").map((item) => item.trim()).filter(Boolean),
+        keywords_es: serviceForm.keywords_es.split(",").map((item) => item.trim()).filter(Boolean),
+        faq_en: JSON.parse(serviceForm.faq_en || "[]"),
+        faq_es: JSON.parse(serviceForm.faq_es || "[]"),
+      };
+    }
+
+    async function saveService(event) {
+      event.preventDefault();
+      setServiceNotice("");
+      try {
+        const payload = servicePayload();
+        const saved = await adminFetch(serviceEditingId ? `/admin/services/${serviceEditingId}` : "/admin/services", {
+          method: serviceEditingId ? "PUT" : "POST",
+          body: JSON.stringify(payload),
+        });
+        setServices((items) => serviceEditingId ? items.map((item) => item.id === saved.id ? saved : item) : [saved, ...items]);
+        setServiceNotice("Servicio guardado correctamente.");
+        resetServiceForm();
+      } catch (requestError) {
+        setError(requestError.message === "Unexpected token" ? "El FAQ debe ser un JSON válido." : requestError.message);
+      }
+    }
+
+    async function deleteService(service) {
+      if (!window.confirm(`¿Eliminar "${service.name_es}"? Esta acción no se puede deshacer.`)) return;
+      try {
+        await adminFetch(`/admin/services/${service.id}`, { method: "DELETE" });
+        setServices((items) => items.filter((item) => item.id !== service.id));
+        if (serviceEditingId === service.id) resetServiceForm();
+      } catch (requestError) {
+        setError(requestError.message);
+      }
+    }
   }
 
   return (
@@ -134,6 +214,39 @@ export default function AdminPage() {
           </> : <div className="empty-admin"><h2>Selecciona una solicitud</h2><p>Elige un caso de la lista para ver toda la información del cliente.</p></div>}
         </section>
       </div>}
+      {key && !error && <section className="admin-seo-editor">
+        <div className="admin-heading">
+          <div><p className="eyebrow">Posicionamiento SEO</p><h2>Servicios y páginas indexables</h2><p>Edita slugs, textos, palabras clave, preguntas frecuentes y publicación sin tocar código.</p></div>
+          <button className="primary" type="button" onClick={resetServiceForm}>+ Nuevo servicio</button>
+        </div>
+        <div className="seo-service-list">
+          {services.map((service) => <div className="seo-service-row" key={service.id}><div><strong>{service.name_es}</strong><span>/es/servicios/{service.slug_es || service.slug}</span><small>{service.published ? "Publicado" : "Borrador"} · {service.category}</small></div><div className="seo-service-actions"><button type="button" onClick={() => editService(service)}>Editar SEO</button><button type="button" onClick={() => deleteService(service)}>Eliminar</button></div></div>)}
+        </div>
+        <form className="seo-editor-form" onSubmit={saveService}>
+          <h3>{serviceEditingId ? "Editar servicio" : "Agregar servicio"}</h3>
+          <div className="seo-form-grid">
+            {[
+              ["name_es", "Nombre en español"], ["name_en", "Name in English"],
+              ["slug_es", "URL slug español"], ["slug_en", "URL slug English"],
+              ["meta_title_es", "Meta title español"], ["meta_title_en", "Meta title English"],
+              ["meta_description_es", "Meta description español"], ["meta_description_en", "Meta description English"],
+              ["keywords_es", "Palabras clave (separadas por coma)"], ["keywords_en", "Keywords (comma separated)"],
+              ["category", "Categoría"], ["provider", "Institución / proveedor"],
+              ["location", "Ubicación"], ["official_url", "URL oficial"], ["image_url", "URL de imagen"],
+            ].map(([field, label]) => <label key={field}>{label}<input value={serviceForm[field] || ""} onChange={(event) => setServiceForm({ ...serviceForm, [field]: event.target.value })} required={["name_es", "name_en", "slug_es", "slug_en", "category", "location"].includes(field)} /></label>)}
+            {[
+              ["description_es", "Descripción SEO español"], ["description_en", "Descripción SEO English"],
+              ["content_es", "Contenido español"], ["content_en", "Content English"],
+              ["requirements_es", "Requisitos español"], ["requirements_en", "Requirements English"],
+              ["steps_es", "Pasos español (1. ... 2. ...)"], ["steps_en", "Steps English (1. ... 2. ...)"],
+              ["faq_es", "FAQ español (JSON)"], ["faq_en", "FAQ English (JSON)"],
+            ].map(([field, label]) => <label className="seo-wide-field" key={field}>{label}<textarea rows={field.startsWith("faq") ? 5 : 4} value={serviceForm[field] || ""} onChange={(event) => setServiceForm({ ...serviceForm, [field]: event.target.value })} /></label>)}
+          </div>
+          <label className="seo-publish"><input type="checkbox" checked={serviceForm.published} onChange={(event) => setServiceForm({ ...serviceForm, published: event.target.checked })} /> Publicar y permitir indexación</label>
+          {serviceNotice && <p className="form-success">{serviceNotice}</p>}
+          <div className="seo-form-actions"><button className="primary" type="submit">Guardar servicio y SEO</button><button type="button" onClick={resetServiceForm}>Limpiar</button></div>
+        </form>
+      </section>}
     </main>
   );
 }

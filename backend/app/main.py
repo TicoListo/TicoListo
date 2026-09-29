@@ -6,6 +6,7 @@ from typing import AsyncGenerator
 from urllib.request import Request as UrlRequest, urlopen
 from urllib.error import HTTPError, URLError
 import asyncio
+import json
 import logging
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
@@ -48,6 +49,26 @@ class Service(Base):
     location: Mapped[str] = mapped_column(String(120))
     provider: Mapped[str | None] = mapped_column(String(180), nullable=True)
     whatsapp: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    # The legacy slug/name/description columns remain the compatibility contract.
+    slug_en: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    slug_es: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    meta_title_en: Mapped[str | None] = mapped_column(String(220), nullable=True)
+    meta_title_es: Mapped[str | None] = mapped_column(String(220), nullable=True)
+    meta_description_en: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    meta_description_es: Mapped[str | None] = mapped_column(String(320), nullable=True)
+    keywords_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    keywords_es: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_es: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requirements_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    requirements_es: Mapped[str | None] = mapped_column(Text, nullable=True)
+    steps_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    steps_es: Mapped[str | None] = mapped_column(Text, nullable=True)
+    faq_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    faq_es: Mapped[str | None] = mapped_column(Text, nullable=True)
+    official_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    published: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
 
 class RequestStatus(str, Enum):
@@ -154,6 +175,51 @@ class ServiceOut(BaseModel):
     location: str
     provider: str | None
     whatsapp: str | None
+    slug_en: str | None = None
+    slug_es: str | None = None
+    meta_title_en: str | None = None
+    meta_title_es: str | None = None
+    meta_description_en: str | None = None
+    meta_description_es: str | None = None
+    keywords_en: list[str] = []
+    keywords_es: list[str] = []
+    content_en: str | None = None
+    content_es: str | None = None
+    requirements_en: str | None = None
+    requirements_es: str | None = None
+    steps_en: str | None = None
+    steps_es: str | None = None
+    faq_en: list[dict[str, str]] = []
+    faq_es: list[dict[str, str]] = []
+    official_url: str | None = None
+    image_url: str | None = None
+    published: bool = True
+
+    @field_validator("keywords_en", "keywords_es", mode="before")
+    @classmethod
+    def decode_keywords(cls, value: str | list[str] | None) -> list[str]:
+        if not value:
+            return []
+        if isinstance(value, list):
+            return value
+        try:
+            decoded = json.loads(value)
+            return decoded if isinstance(decoded, list) else [value]
+        except (TypeError, json.JSONDecodeError):
+            return [item.strip() for item in value.split(",") if item.strip()]
+
+    @field_validator("faq_en", "faq_es", mode="before")
+    @classmethod
+    def decode_faq(cls, value: str | list[dict[str, str]] | None) -> list[dict[str, str]]:
+        if not value:
+            return []
+        if isinstance(value, list):
+            return value
+        try:
+            decoded = json.loads(value)
+            return decoded if isinstance(decoded, list) else []
+        except (TypeError, json.JSONDecodeError):
+            return []
 
     model_config = {"from_attributes": True}
 
@@ -298,6 +364,66 @@ class GuideIn(BaseModel):
     published: bool = True
 
 
+class ServiceIn(BaseModel):
+    slug_en: str = Field(min_length=3, max_length=120)
+    slug_es: str = Field(min_length=3, max_length=120)
+    category: str = Field(min_length=2, max_length=80)
+    name_en: str = Field(min_length=2, max_length=180)
+    name_es: str = Field(min_length=2, max_length=180)
+    description_en: str = Field(min_length=2)
+    description_es: str = Field(min_length=2)
+    location: str = Field(min_length=2, max_length=120)
+    provider: str | None = Field(default=None, max_length=180)
+    whatsapp: str | None = Field(default=None, max_length=40)
+    meta_title_en: str | None = Field(default=None, max_length=220)
+    meta_title_es: str | None = Field(default=None, max_length=220)
+    meta_description_en: str | None = Field(default=None, max_length=320)
+    meta_description_es: str | None = Field(default=None, max_length=320)
+    keywords_en: list[str] = Field(default_factory=list)
+    keywords_es: list[str] = Field(default_factory=list)
+    content_en: str | None = None
+    content_es: str | None = None
+    requirements_en: str | None = None
+    requirements_es: str | None = None
+    steps_en: str | None = None
+    steps_es: str | None = None
+    faq_en: list[dict[str, str]] = Field(default_factory=list)
+    faq_es: list[dict[str, str]] = Field(default_factory=list)
+    official_url: str | None = Field(default=None, max_length=500)
+    image_url: str | None = Field(default=None, max_length=500)
+    published: bool = True
+
+
+class ServiceUpdate(BaseModel):
+    slug_en: str | None = Field(default=None, min_length=3, max_length=120)
+    slug_es: str | None = Field(default=None, min_length=3, max_length=120)
+    category: str | None = Field(default=None, min_length=2, max_length=80)
+    name_en: str | None = Field(default=None, min_length=2, max_length=180)
+    name_es: str | None = Field(default=None, min_length=2, max_length=180)
+    description_en: str | None = Field(default=None, min_length=2)
+    description_es: str | None = Field(default=None, min_length=2)
+    location: str | None = Field(default=None, min_length=2, max_length=120)
+    provider: str | None = Field(default=None, max_length=180)
+    whatsapp: str | None = Field(default=None, max_length=40)
+    meta_title_en: str | None = Field(default=None, max_length=220)
+    meta_title_es: str | None = Field(default=None, max_length=220)
+    meta_description_en: str | None = Field(default=None, max_length=320)
+    meta_description_es: str | None = Field(default=None, max_length=320)
+    keywords_en: list[str] | None = None
+    keywords_es: list[str] | None = None
+    content_en: str | None = None
+    content_es: str | None = None
+    requirements_en: str | None = None
+    requirements_es: str | None = None
+    steps_en: str | None = None
+    steps_es: str | None = None
+    faq_en: list[dict[str, str]] | None = None
+    faq_es: list[dict[str, str]] | None = None
+    official_url: str | None = Field(default=None, max_length=500)
+    image_url: str | None = Field(default=None, max_length=500)
+    published: bool | None = None
+
+
 def require_admin(x_admin_key: str = Header(default="")) -> None:
     if x_admin_key != settings.admin_api_key:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
@@ -306,6 +432,8 @@ def require_admin(x_admin_key: str = Header(default="")) -> None:
 def catalog_service(slug: str, category: str, name_en: str, name_es: str, provider: str) -> dict[str, str | None]:
     return {
         "slug": slug,
+        "slug_en": slug,
+        "slug_es": slug,
         "category": category,
         "name_en": name_en,
         "name_es": name_es,
@@ -314,6 +442,7 @@ def catalog_service(slug: str, category: str, name_en: str, name_es: str, provid
         "location": "Costa Rica",
         "provider": provider,
         "whatsapp": None,
+        "published": True,
     }
 
 
@@ -449,6 +578,20 @@ async def startup() -> None:
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await connection.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS provider VARCHAR(180)"))
+        for column, definition in (
+            ("slug_en", "VARCHAR(120)"), ("slug_es", "VARCHAR(120)"),
+            ("meta_title_en", "VARCHAR(220)"), ("meta_title_es", "VARCHAR(220)"),
+            ("meta_description_en", "VARCHAR(320)"), ("meta_description_es", "VARCHAR(320)"),
+            ("keywords_en", "TEXT"), ("keywords_es", "TEXT"), ("content_en", "TEXT"),
+            ("content_es", "TEXT"), ("requirements_en", "TEXT"), ("requirements_es", "TEXT"),
+            ("steps_en", "TEXT"), ("steps_es", "TEXT"), ("faq_en", "TEXT"), ("faq_es", "TEXT"),
+            ("official_url", "VARCHAR(500)"), ("image_url", "VARCHAR(500)"),
+            ("published", "BOOLEAN DEFAULT TRUE"),
+        ):
+            await connection.execute(text(f"ALTER TABLE services ADD COLUMN IF NOT EXISTS {column} {definition}"))
+        await connection.execute(text("CREATE INDEX IF NOT EXISTS ix_services_slug_en ON services (slug_en)"))
+        await connection.execute(text("CREATE INDEX IF NOT EXISTS ix_services_slug_es ON services (slug_es)"))
+        await connection.execute(text("UPDATE services SET slug_en = COALESCE(slug_en, slug), slug_es = COALESCE(slug_es, slug), published = COALESCE(published, TRUE)"))
         await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS assigned_to VARCHAR(120)"))
         await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS province VARCHAR(80)"))
         await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS tags TEXT DEFAULT ''"))
@@ -518,10 +661,35 @@ async def list_services(
     category: str | None = Query(default=None),
     session: AsyncSession = Depends(get_session),
 ) -> list[Service]:
-    query = select(Service).order_by(Service.id)
+    query = select(Service).where(Service.published.is_(True)).order_by(Service.id)
     if category:
         query = query.where(Service.category == category)
     return list((await session.scalars(query)).all())
+
+
+def service_values(payload: ServiceIn | ServiceUpdate) -> dict:
+    values = payload.model_dump(exclude_unset=isinstance(payload, ServiceUpdate))
+    for field in ("keywords_en", "keywords_es", "faq_en", "faq_es"):
+        if field in values:
+            values[field] = json.dumps(values[field], ensure_ascii=False)
+    if "slug_en" in values and values["slug_en"] is not None:
+        values["slug"] = values["slug_en"]
+    return values
+
+
+@app.get("/services/{language}/{slug}", response_model=ServiceOut)
+async def get_service_by_language(
+    language: str,
+    slug: str,
+    session: AsyncSession = Depends(get_session),
+) -> Service:
+    if language not in {"en", "es"}:
+        raise HTTPException(status_code=400, detail="Language must be en or es")
+    slug_column = Service.slug_en if language == "en" else Service.slug_es
+    service = await session.scalar(select(Service).where(slug_column == slug, Service.published.is_(True)))
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+    return service
 
 
 @app.get("/guides", response_model=list[GuideOut])
@@ -642,6 +810,87 @@ async def admin_update_request(
 @app.get("/admin/guides", response_model=list[GuideOut], dependencies=[Depends(require_admin)])
 async def admin_list_guides(session: AsyncSession = Depends(get_session)) -> list[Guide]:
     return list((await session.scalars(select(Guide).order_by(Guide.id.desc()))).all())
+
+
+@app.get("/admin/services", response_model=list[ServiceOut], dependencies=[Depends(require_admin)])
+async def admin_list_services(session: AsyncSession = Depends(get_session)) -> list[Service]:
+    return list((await session.scalars(select(Service).order_by(Service.id.desc()))).all())
+
+
+@app.get("/admin/services/{service_id}", response_model=ServiceOut, dependencies=[Depends(require_admin)])
+async def admin_get_service(service_id: int, session: AsyncSession = Depends(get_session)) -> Service:
+    service = await session.get(Service, service_id)
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+    return service
+
+
+@app.post("/admin/services", response_model=ServiceOut, status_code=201, dependencies=[Depends(require_admin)])
+async def admin_create_service(payload: ServiceIn, session: AsyncSession = Depends(get_session)) -> Service:
+    if await session.scalar(select(Service).where((Service.slug_en == payload.slug_en) | (Service.slug_es == payload.slug_es))):
+        raise HTTPException(status_code=409, detail="Service slug already exists")
+    service = Service(**service_values(payload))
+    session.add(service)
+    await session.commit()
+    await session.refresh(service)
+    return service
+
+
+@app.patch("/admin/services/{service_id}", response_model=ServiceOut, dependencies=[Depends(require_admin)])
+async def admin_update_service(
+    service_id: int,
+    payload: ServiceUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> Service:
+    service = await session.get(Service, service_id)
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+    values = service_values(payload)
+    for slug_field in ("slug_en", "slug_es"):
+        slug = values.get(slug_field)
+        if slug and await session.scalar(select(Service).where(getattr(Service, slug_field) == slug, Service.id != service_id)):
+            raise HTTPException(status_code=409, detail="Service slug already exists")
+    for key, value in values.items():
+        setattr(service, key, value)
+    await session.commit()
+    await session.refresh(service)
+    return service
+
+
+@app.put("/admin/services/{service_id}", response_model=ServiceOut, dependencies=[Depends(require_admin)])
+async def admin_replace_service(
+    service_id: int,
+    payload: ServiceIn,
+    session: AsyncSession = Depends(get_session),
+) -> Service:
+    service = await session.get(Service, service_id)
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+    values = service_values(payload)
+    duplicate = await session.scalar(
+        select(Service).where(
+            ((Service.slug_en == payload.slug_en) | (Service.slug_es == payload.slug_es)),
+            Service.id != service_id,
+        )
+    )
+    if duplicate:
+        raise HTTPException(status_code=409, detail="Service slug already exists")
+    for key, value in values.items():
+        setattr(service, key, value)
+    await session.commit()
+    await session.refresh(service)
+    return service
+
+
+@app.delete("/admin/services/{service_id}", response_model=ServiceOut, dependencies=[Depends(require_admin)])
+async def admin_delete_service(service_id: int, session: AsyncSession = Depends(get_session)) -> Service:
+    service = await session.get(Service, service_id)
+    if service is None:
+        raise HTTPException(status_code=404, detail="Service not found")
+    deleted = ServiceOut.model_validate(service)
+    await session.delete(service)
+    await session.commit()
+    return deleted
 
 
 @app.post("/admin/guides", response_model=GuideOut, status_code=201, dependencies=[Depends(require_admin)])
