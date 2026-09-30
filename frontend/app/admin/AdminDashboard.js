@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
+import CalendarWorkspace from "./CalendarWorkspace";
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
 const statuses = [
@@ -23,11 +24,15 @@ const emptyService = {
 export default function AdminPage() {
   const pathname = usePathname();
   const router = useRouter();
-  const [key, setKey] = useState("");
+  const [key, setKey] = useState(null);
+  const [sessionReady, setSessionReady] = useState(false);
   const [requests, setRequests] = useState([]);
   const [messages, setMessages] = useState([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messageSending, setMessageSending] = useState(false);
   const [selectedId, setSelectedId] = useState(null);
   const [filter, setFilter] = useState("all");
+  const [search, setSearch] = useState("");
   const [note, setNote] = useState("");
   const [manager, setManager] = useState("");
   const [error, setError] = useState("");
@@ -37,12 +42,26 @@ export default function AdminPage() {
   const [serviceNotice, setServiceNotice] = useState("");
   const [showKey, setShowKey] = useState(false);
   const selected = requests.find((item) => item.id === selectedId) || null;
-  const section = pathname === "/admin/seo" ? "seo" : pathname === "/admin/clientes" ? "clientes" : "login";
+  const section = pathname === "/admin/seo" ? "seo" : pathname === "/admin/calendario" ? "calendario" : pathname === "/admin/clientes" ? "clientes" : "login";
 
-  const visibleRequests = useMemo(
-    () => filter === "all" ? requests : requests.filter((item) => item.status === filter),
-    [filter, requests],
-  );
+  const dashboardMetrics = useMemo(() => ({
+    total: requests.length,
+    pending: requests.filter((item) => !["completed", "cancelled"].includes(item.status)).length,
+    inProgress: requests.filter((item) => ["in_progress", "waiting_institution", "correction_required"].includes(item.status)).length,
+    completed: requests.filter((item) => item.status === "completed").length,
+  }), [requests]);
+
+  const visibleRequests = useMemo(() => {
+    const normalizedSearch = search.trim().toLowerCase();
+    return requests.filter((item) => {
+      const matchesFilter = filter === "all" || item.status === filter;
+      const searchable = [item.name, item.email, item.phone, item.category, item.province, item.location, item.description]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+      return matchesFilter && (!normalizedSearch || searchable.includes(normalizedSearch));
+    });
+  }, [filter, requests, search]);
 
   async function adminFetch(path, options = {}) {
     const response = await fetch(`${API_URL}${path}`, {
@@ -73,29 +92,40 @@ export default function AdminPage() {
   }
 
   async function loadMessages(requestId) {
+    setMessagesLoading(true);
     try {
       setMessages(await adminFetch(`/admin/assistance-requests/${requestId}/messages`));
     } catch (requestError) {
       setError(requestError.message);
+    } finally {
+      setMessagesLoading(false);
     }
   }
 
   useEffect(() => {
     const savedKey = window.sessionStorage.getItem("ticolisto-admin-key") || "";
     setKey(savedKey);
-    if (savedKey && pathname === "/admin") router.replace("/admin/clientes");
+    setSessionReady(true);
   }, []);
 
   useEffect(() => {
+    if (!sessionReady) return;
     if (!key && section !== "login") {
       router.replace("/admin");
       return;
     }
-    if (key) {
-      loadRequests();
-      loadServices();
+    if (key && section === "login") {
+      router.replace("/admin/clientes");
+      return;
     }
-  }, [key, section]);
+    if (key && (section === "clientes" || section === "calendario")) {
+      loadRequests();
+    }
+  }, [key, section, sessionReady, router]);
+
+  useEffect(() => {
+    if (key && sessionReady && section === "seo") loadServices();
+  }, [key, section, sessionReady]);
 
   useEffect(() => {
     if (selected) {
@@ -104,10 +134,28 @@ export default function AdminPage() {
     }
   }, [selectedId, requests]);
 
+  useEffect(() => {
+    if (section !== "clientes") return;
+    const calendarNote = window.sessionStorage.getItem("ticolisto-calendar-note");
+    if (calendarNote) {
+      setNote(calendarNote);
+      window.sessionStorage.removeItem("ticolisto-calendar-note");
+    }
+  }, [section]);
+
   function saveKey(event) {
     event.preventDefault();
-    window.sessionStorage.setItem("ticolisto-admin-key", key);
+    const submittedKey = new FormData(event.currentTarget).get("admin-key")?.toString().trim() || "";
+    if (!submittedKey) return;
+    window.sessionStorage.setItem("ticolisto-admin-key", submittedKey);
+    setKey(submittedKey);
     router.push("/admin/clientes");
+  }
+
+  function logout() {
+    window.sessionStorage.removeItem("ticolisto-admin-key");
+    setKey("");
+    router.replace("/admin");
   }
 
   async function updateCase(changes) {
@@ -125,16 +173,19 @@ export default function AdminPage() {
 
   async function addNote(event) {
     event.preventDefault();
-    if (!selected || !note.trim()) return;
+    if (!selected || !note.trim() || messageSending) return;
+    setMessageSending(true);
     try {
-      await adminFetch(`/admin/assistance-requests/${selected.id}/messages`, {
+      const message = await adminFetch(`/admin/assistance-requests/${selected.id}/messages`, {
         method: "POST",
         body: JSON.stringify({ author: "Administrador", message: note.trim() }),
       });
+      setMessages((items) => [...items, message]);
       setNote("");
-      loadMessages(selected.id);
     } catch (requestError) {
       setError(requestError.message);
+    } finally {
+      setMessageSending(false);
     }
   }
 
@@ -203,10 +254,12 @@ export default function AdminPage() {
       </div>
       {key && section !== "login" && <nav className="admin-section-nav" aria-label="Secciones administrativas">
         <a className={section === "clientes" ? "active" : ""} href="/admin/clientes">👥 Clientes</a>
+        <a className={section === "calendario" ? "active" : ""} href="/admin/calendario">📅 Calendario</a>
         <a className={section === "seo" ? "active" : ""} href="/admin/seo">📈 Posicionamiento SEO</a>
-        <a href="/admin">🔒 Cerrar sesión</a>
+        <button type="button" onClick={logout}>🔒 Cerrar sesión</button>
       </nav>}
-      {section === "login" && <section className="admin-login-card" aria-labelledby="admin-login-title">
+      {!sessionReady && <section className="admin-login-card admin-login-loading" aria-live="polite"><div className="admin-login-brand" aria-hidden="true"><span className="admin-login-mark">T</span></div><p>Preparando acceso seguro...</p></section>}
+      {sessionReady && section === "login" && <section className="admin-login-card" aria-labelledby="admin-login-title">
         <div className="admin-login-brand" aria-hidden="true"><span className="admin-login-mark">T</span></div>
         <div className="admin-login-copy">
           <p className="eyebrow">Acceso protegido</p>
@@ -217,7 +270,7 @@ export default function AdminPage() {
           <label htmlFor="admin-key">Clave de administrador
             <div className="admin-key-field">
               <span aria-hidden="true">⌕</span>
-              <input id="admin-key" type={showKey ? "text" : "password"} value={key} onChange={(event) => { setKey(event.target.value); setError(""); }} placeholder="Escribe tu clave de acceso" autoComplete="current-password" required />
+              <input id="admin-key" name="admin-key" type={showKey ? "text" : "password"} defaultValue="" onInput={() => setError("")} placeholder="Escribe tu clave de acceso" autoComplete="current-password" required />
               <button type="button" className="admin-key-toggle" onClick={() => setShowKey((visible) => !visible)} aria-label={showKey ? "Ocultar clave" : "Mostrar clave"}>{showKey ? "Ocultar" : "Mostrar"}</button>
             </div>
           </label>
@@ -227,8 +280,16 @@ export default function AdminPage() {
       </section>}
       {error && <p role="alert" className="form-error">{error}</p>}
       {key && section === "clientes" && !error && <div className="admin-workspace">
+        <section className="admin-overview" aria-label="Resumen operativo">
+          <div className="admin-overview-card"><span>Solicitudes totales</span><strong>{dashboardMetrics.total}</strong><small>Todos los casos registrados</small></div>
+          <div className="admin-overview-card admin-overview-warning"><span>Casos pendientes</span><strong>{dashboardMetrics.pending}</strong><small>Requieren seguimiento</small></div>
+          <div className="admin-overview-card admin-overview-progress"><span>En proceso</span><strong>{dashboardMetrics.inProgress}</strong><small>En atención activa</small></div>
+          <div className="admin-overview-card admin-overview-success"><span>Finalizados</span><strong>{dashboardMetrics.completed}</strong><small>Casos completados</small></div>
+        </section>
         <aside className="admin-sidebar">
           <div className="admin-sidebar-head"><h2>Solicitudes</h2><span>{visibleRequests.length}</span></div>
+          <label className="admin-search-label" htmlFor="admin-request-search">Buscar solicitud</label>
+          <div className="admin-request-search"><span aria-hidden="true">⌕</span><input id="admin-request-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nombre, correo, teléfono..." /><button type="button" onClick={() => setSearch("")} disabled={!search} aria-label="Limpiar búsqueda">×</button></div>
           <div className="admin-filters">{statuses.map(([value, label]) => <button key={value} className={filter === value ? "admin-filter active" : "admin-filter"} onClick={() => setFilter(value)}>{label}<span>{value === "all" ? requests.length : requests.filter((item) => item.status === value).length}</span></button>)}</div>
           <div className="admin-cases">
             {visibleRequests.map((item) => <button key={item.id} className={selected?.id === item.id ? "admin-case selected" : "admin-case"} onClick={() => setSelectedId(item.id)}><strong>#{item.id} · {item.name}</strong><span>{item.category}</span><small>{statusLabels[item.status]}</small></button>)}
@@ -240,10 +301,18 @@ export default function AdminPage() {
             <div className="client-grid"><div><span>Correo electrónico</span><a href={`mailto:${selected.email}`}>{selected.email}</a></div><div><span>Teléfono</span><a href={`tel:${selected.phone}`}>{selected.phone}</a></div><div><span>Ubicación</span><strong>{selected.location}</strong></div><div><span>Gestor asignado</span><strong>{selected.assigned_to || "Sin asignar"}</strong></div></div>
             <div className="detail-block"><h3>Necesidad del cliente</h3><p className="client-description">{selected.description}</p></div>
             <div className="detail-actions"><label>Estado<select value={selected.status} onChange={(event) => updateCase({ status: event.target.value })}>{statuses.slice(1).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label><label>Asignar gestor<input value={manager} onChange={(event) => setManager(event.target.value)} onBlur={() => updateCase({ assigned_to: manager || null })} placeholder="Nombre del gestor" /></label></div>
-            <div className="detail-block"><h3>Seguimiento y comunicación</h3><div className="message-list">{messages.map((item) => <div className="message-item" key={item.id}><strong>{item.author}</strong><p>{item.message}</p></div>)}{!messages.length && <p className="muted">Todavía no hay notas de seguimiento.</p>}</div><form className="message-form" onSubmit={addNote}><textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Escribe una nota o actualización del caso..." required /><button className="primary" type="submit">Guardar seguimiento</button></form></div>
+            <div className="detail-block admin-chat-panel">
+              <div className="admin-chat-header"><div><p className="eyebrow">Canal privado del caso</p><h3>💬 Conversación con el cliente</h3><p>Las respuestas quedan guardadas en el historial de esta solicitud.</p></div><button type="button" className="chat-refresh" onClick={() => loadMessages(selected.id)} disabled={messagesLoading}>{messagesLoading ? "Actualizando..." : "↻ Actualizar"}</button></div>
+              <div className="message-list" aria-live="polite">
+                {messagesLoading && !messages.length ? <p className="chat-empty">Cargando conversación...</p> : messages.map((item) => <div className={`message-item ${item.author === "Administrador" ? "message-item-admin" : "message-item-client"}`} key={item.id}><div className="message-meta"><strong>{item.author === "Administrador" ? "Tú · Gestor" : `Cliente · ${item.author}`}</strong><time>{item.created_at ? new Intl.DateTimeFormat("es-CR", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.created_at)) : ""}</time></div><p>{item.message}</p></div>)}
+                {!messagesLoading && !messages.length && <p className="chat-empty">Aún no hay mensajes. Envía la primera actualización al cliente.</p>}
+              </div>
+              <form className="message-form" onSubmit={addNote}><textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Escribe una respuesta, solicita documentos o deja una actualización..." required /><button className="primary" type="submit" disabled={messageSending}>{messageSending ? "Enviando..." : "Enviar mensaje →"}</button></form>
+            </div>
           </> : <div className="empty-admin"><h2>Selecciona una solicitud</h2><p>Elige un caso de la lista para ver toda la información del cliente.</p></div>}
         </section>
       </div>}
+      {key && section === "calendario" && !error && <CalendarWorkspace adminFetch={adminFetch} requests={requests} onGoToClients={() => router.push("/admin/clientes")} />}
       {key && section === "seo" && !error && <section className="admin-seo-editor">
         <div className="admin-heading">
           <div><p className="eyebrow">Posicionamiento SEO</p><h2>Servicios y páginas indexables</h2><p>Edita slugs, textos, palabras clave, preguntas frecuentes y publicación sin tocar código.</p></div>

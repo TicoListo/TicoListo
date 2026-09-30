@@ -12,12 +12,12 @@ const fallbackServices = [
 
 const serviceIcons = {
   "renew-drivers-license": "🚘", "first-drivers-license": "🚘", "vehicle-inspection": "🔧",
-  "buy-used-vehicle": "🚙", "sell-vehicle": "💵", "lost-id": "🪪", "passport-renewal": "✈️",
-  "minor-passport": "👨‍👩‍👧", "registry-certificate": "📄", "buy-property": "🏡", "sell-property": "🏠",
-  "short-stay-rental": "🛏️", "create-company": "🏢", "tax-obligations": "🧾", "municipal-license": "🏪",
-  "health-permit": "🧼", "self-employed": "🧑‍💻", "dismissal-next-steps": "📦", "birth-documents": "👶",
-  "civil-marriage": "💍", "death-of-family-member": "🕊️", "minor-international-travel": "🛫",
-  "legal-status-certificate": "🏢", marchamo: "🧾", "business-checklist": "🚀", "ccss-sick-leave": "🏥",
+  "buy-used-vehicle": "🚙", "sell-vehicle": "🚗", "lost-id": "🪪", "passport-renewal": "🛂",
+  "minor-passport": "🧳", "registry-certificate": "📜", "buy-property": "🏠", "sell-property": "🏡",
+  "short-stay-rental": "🛏️", "create-company": "🏢", "tax-obligations": "💰", "municipal-license": "🏛️",
+  "health-permit": "🩺", "self-employed": "💼", "dismissal-next-steps": "📋", "birth-documents": "👶",
+  "civil-marriage": "💍", "death-of-family-member": "🕊️", "minor-international-travel": "✈️",
+  "legal-status-certificate": "📄", marchamo: "🚘", "business-checklist": "✅", "ccss-sick-leave": "🏥",
 };
 
 const categoryLabels = {
@@ -33,17 +33,6 @@ const smartMatches = [
   ["abrir negocio", "business-checklist"], ["despido", "dismissal-next-steps"], ["propiedad", "buy-property"],
   ["marchamo", "marchamo"], ["incapacidad", "ccss-sick-leave"], ["casarme", "civil-marriage"],
 ];
-
-const dueItems = [
-  { id: "marchamo", icon: "🚘", title: "Marchamo / impuesto vehicular", rule: "Cobro desde el 1 de noviembre; fecha límite sin recargo: 31 de diciembre.", date: "31 de diciembre", url: "https://www.ins-cr.com", source: "INS" },
-  { id: "inspection", icon: "🔧", title: "Inspección técnica vehicular", rule: "Se programa una vez al año según el último dígito de la placa.", date: "Mes según placa", url: "https://www.dekra.cr", source: "DEKRA" },
-  { id: "municipal", icon: "🏡", title: "Impuestos municipales", rule: "Los bienes inmuebles y servicios urbanos suelen pagarse trimestralmente.", date: "31 mar · 30 jun · 30 sep · 31 dic", url: "https://www.gob.cr", source: "Municipalidad respectiva" },
-  { id: "income", icon: "🧾", title: "Impuesto sobre la renta D-101", rule: "Fecha límite anual indicada por Hacienda para la declaración y pago.", date: "15 de marzo", url: "https://www.atv.hacienda.go.cr", source: "Ministerio de Hacienda" },
-  { id: "iva", icon: "📊", title: "IVA D-104", rule: "Se presenta y paga a más tardar el día 15 del mes siguiente.", date: "Día 15 de cada mes", url: "https://www.atv.hacienda.go.cr", source: "Ministerio de Hacienda" },
-  { id: "ccss", icon: "🏥", title: "Cargas sociales CCSS", rule: "Revisa la fecha exacta indicada en la factura o cuenta institucional.", date: "Fecha de la factura", url: "https://edus.ccss.sa.cr", source: "CCSS" },
-];
-
-const plateMonths = { "1": "Enero", "2": "Febrero", "3": "Marzo", "4": "Abril", "5": "Mayo", "6": "Junio", "7": "Julio", "8": "Agosto", "9": "Septiembre", "0": "Octubre" };
 
 const officialPortals = {
   vehicles: ["COSEVI / Educación Vial", "https://www.educacionvial.go.cr"],
@@ -85,6 +74,8 @@ const serviceOfficialDetails = {
   "ccss-sick-leave": ["Caja Costarricense de Seguro Social", "https://edus.ccss.sa.cr"],
 };
 
+const popularServiceSlugs = ["renew-drivers-license", "passport-renewal", "lost-id", "marchamo"];
+
 function getInstructions(service) {
   const [institution, url] = serviceOfficialDetails[service.slug] || officialPortals[service.category] || ["Institución responsable", "https://www.gob.cr"];
   return {
@@ -112,14 +103,12 @@ export default function Home() {
   const [contactNote, setContactNote] = useState("");
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantStep, setAssistantStep] = useState(0);
+  const [assistanceStep, setAssistanceStep] = useState(1);
   const [province, setProvince] = useState("");
   const [chatToken, setChatToken] = useState("");
   const [chatMessages, setChatMessages] = useState([]);
   const [chatDraft, setChatDraft] = useState("");
   const [chatSending, setChatSending] = useState(false);
-  const [calendarOpen, setCalendarOpen] = useState(false);
-  const [plate, setPlate] = useState("");
-  const [calendarNote, setCalendarNote] = useState("");
   const es = language === "es";
   const selectedInstructions = selected ? getInstructions(selected) : null;
 
@@ -132,7 +121,7 @@ export default function Home() {
           es: item.name_es,
           text: es ? item.description_es : item.description_en,
           provider: item.provider || item.location,
-          icon: serviceIcons[item.slug] || "✦",
+          icon: serviceIcons[item.slug] || "•",
         })));
       }
     }).catch(() => {});
@@ -147,11 +136,6 @@ export default function Home() {
   function openAssistant() {
     setAssistantOpen(true);
     setAssistantStep(1);
-  }
-
-  function activateReminder(item) {
-    setCalendarNote(`Quiero activar recordatorios para: ${item.title}. Necesito conocer el servicio y el costo.`);
-    document.getElementById("assistance").scrollIntoView({ behavior: "smooth" });
   }
 
   useEffect(() => {
@@ -205,7 +189,6 @@ export default function Home() {
         <a className="logo" href="#top" aria-label="TicoListo home"><span className="logo-mark">T</span><span>TicoListo</span></a>
         <nav className="nav-links" aria-label="Main navigation">
           <a href="#services">{es ? "Explorar trámites" : "Explore services"}</a>
-          <a href="#calendar">{es ? "Calendario de vencimientos" : "Due date calendar"}</a>
           <a href="#assistance">{es ? "Necesito ayuda" : "I need help"}</a>
         </nav>
         <button className="language" onClick={() => setLanguage(es ? "en" : "es")}>{es ? "EN" : "ES"} <span>⌄</span></button>
@@ -214,10 +197,10 @@ export default function Home() {
       <section className="hero-banner" id="top">
         <div className="hero-copy">
           <p className="eyebrow">{es ? "GUÍA DE SERVICIOS EN COSTA RICA" : "COSTA RICA SERVICE GUIDE"}</p>
-          <h1>{es ? "Encuentra cómo resolverlo." : "Find your next step."}</h1>
+          <h1><span>{es ? "Encuentra" : "Find"}</span> {es ? "cómo resolverlo." : "your next step."}</h1>
           <p>{es ? "Trámites y servicios explicados de forma clara, en un solo lugar." : "Public services explained clearly, all in one place."}</p>
         </div>
-        <div className="hero-art" aria-hidden="true"><span>🇨🇷</span><i>✓</i><b>✦</b></div>
+        <div className="hero-art" aria-hidden="true"><span>CR</span><i>✓</i><b>✦</b></div>
         <div className="search-panel">
           <label htmlFor="service-search">{es ? "¿Qué necesitas resolver?" : "What do you need to solve?"}</label>
           <div className="search-row">
@@ -226,14 +209,9 @@ export default function Home() {
             <button className="search-button" onClick={() => document.getElementById("services").scrollIntoView({ behavior: "smooth" })}>{es ? "Buscar" : "Search"}</button>
           </div>
           <p className="search-hint">{es ? "Ej.: licencia, pasaporte, propiedad, Hacienda..." : "Example: license, passport, property, taxes..."}</p>
-          <button className="assistant-trigger" onClick={openAssistant}>✨ {es ? "¿No sabes cómo buscar? Te guiamos" : "Need help choosing? Ask the assistant"}</button>
+          <button className="assistant-trigger" onClick={openAssistant}>✦ {es ? "¿No sabes cómo buscar? Te guiamos" : "Need help choosing? Ask the assistant"}</button>
           {smartSuggestion && <button className="smart-suggestion" onClick={() => { const match = catalog.find((item) => item.slug === smartSuggestion[1]); if (match) setSelected(match); }}>Asistente sugiere: <strong>{catalog.find((item) => item.slug === smartSuggestion[1])?.es}</strong> →</button>}
         </div>
-      </section>
-
-      <section className="calendar-module" id="calendar">
-        <div className="calendar-heading"><div><p className="eyebrow">ASISTENTE VIRTUAL DE TRÁMITES CR</p><h2>📅 Calendario de control de deudas y vencimientos</h2><p>Controla fechas importantes de vehículos, impuestos, municipalidades y documentos.</p></div><button className="calendar-toggle" onClick={() => setCalendarOpen(!calendarOpen)}>{calendarOpen ? "Ocultar calendario" : "Abrir tablero"} ↗</button></div>
-        {calendarOpen && <><div className="calendar-tools"><label>Último dígito de placa<input inputMode="numeric" maxLength="1" value={plate} onChange={(event) => setPlate(event.target.value.replace(/\D/g, ""))} placeholder="Ej. 5" /></label>{plate && <p>Para placa {plate}: la inspección técnica suele corresponder en <strong>{plateMonths[plate]}</strong>. Verifica la cita en DEKRA.</p>}</div><div className="due-grid">{dueItems.map((item) => <article className="due-card" key={item.id}><span className="due-icon">{item.icon}</span><div><span className="due-source">{item.source}</span><h3>{item.title}</h3><p>{item.rule}</p><strong className="due-date">🗓️ {item.date}</strong><div className="due-actions"><a href={item.url} target="_blank" rel="noreferrer">Consultar portal oficial ↗</a><button onClick={() => activateReminder(item)}>Activar recordatorio</button></div></div></article>)}</div><p className="calendar-disclaimer">Las fechas y recargos pueden cambiar. Confirma siempre el monto y vencimiento en el portal oficial antes de pagar.</p></>}
       </section>
 
       <section className="catalog-layout" id="services">
@@ -260,18 +238,60 @@ export default function Home() {
               </button>
             ))}
           </div>
-          {!filtered.length && <div className="empty-state">{es ? "No encontramos ese trámite. Prueba otra búsqueda." : "No services found. Try another search."}</div>}
+          {!filtered.length && <div className="empty-state"><span className="empty-icon">⌕</span><h3>{es ? "No encontramos resultados" : "No results found"}</h3><p>{es ? "Prueba con otra palabra o explora una categoría para encontrar una guía útil." : "Try another keyword or browse a category to find a useful guide."}</p><button className="secondary" onClick={() => { setQuery(""); setCategory("all"); }}>{es ? "Ver todos los servicios" : "View all services"}</button></div>}
+        </div>
+      </section>
+
+      <section className="category-showcase" aria-labelledby="category-title">
+        <div className="section-heading"><div><p className="eyebrow">{es ? "EXPLORA POR CATEGORÍA" : "BROWSE BY CATEGORY"}</p><h2 id="category-title">{es ? "Encuentra tu punto de partida" : "Find your starting point"}</h2></div><span>{es ? "Guías claras, paso a paso" : "Clear, step-by-step guides"}</span></div>
+        <div className="category-grid">
+          {Object.entries(categoryLabels).filter(([key]) => key !== "all").slice(0, 8).map(([key, labels]) => (
+            <button className={`category-card category-${key}`} key={key} onClick={() => { setCategory(key); document.getElementById("services").scrollIntoView({ behavior: "smooth" }); }}>
+              <span className="category-card-icon">{({ transport: "TR", vehicles: "VH", paperwork: "DOC", identity: "ID", travel: "TRIP", property: "HOME", business: "BIZ", family: "FAM" })[key]}</span>
+              <strong>{labels[es ? 0 : 1]}</strong><small>{catalog.filter((item) => item.category === key).length} {es ? "servicios" : "services"}</small><span className="category-card-arrow">↗</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="popular-section" aria-labelledby="popular-title">
+        <div className="section-heading"><div><p className="eyebrow">{es ? "LO MÁS BUSCADO" : "POPULAR SERVICES"}</p><h2 id="popular-title">{es ? "Trámites que más consultan" : "Most requested services"}</h2></div><span>{es ? "Accesos rápidos para empezar" : "Quick ways to get started"}</span></div>
+        <div className="popular-grid">
+          {catalog.filter((service, index) => popularServiceSlugs.includes(service.slug) || (!service.slug && index < 4)).slice(0, 4).map((service) => (
+            <button className="popular-card" key={service.slug} onClick={() => setSelected(service)}><span className="row-icon">{service.icon}</span><span><strong>{es ? service.es : service.title}</strong><small>{service.provider || service.location}</small></span><span className="row-arrow">›</span></button>
+          ))}
         </div>
       </section>
 
       <section className="assistance" id="assistance">
         <div><p className="eyebrow">TICOLISTO CONCIERGE</p><h2>{es ? "¿No encuentras lo que buscas?" : "Can't find what you need?"}</h2><p>{es ? "Cuéntanos qué necesitas y te ayudamos a ordenar los siguientes pasos." : "Tell us what you need and we'll help you find the next step."}</p></div>
-        {sent ? <div className="success" role="status">✓ {es ? "Solicitud recibida. Te contactaremos pronto." : "Request received. We will contact you soon."}{chatToken && <div className="client-chat"><h3>💬 Chat con tu gestor</h3><p>Escribe aquí para dar seguimiento a tu solicitud. La conversación se actualiza automáticamente.</p><div className="chat-messages">{chatMessages.map((item) => <div className={item.author === "Cliente" ? "chat-message mine" : "chat-message"} key={item.id}><strong>{item.author}</strong><span>{item.message}</span></div>)}</div><form onSubmit={handleChatSubmit} className="chat-form"><input value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} placeholder="Escribe un mensaje..." /><button className="primary" disabled={chatSending}>{chatSending ? "..." : "Enviar"}</button></form></div>}</div> : <form onSubmit={handleSubmit}><input name="name" required minLength="2" placeholder={es ? "Tu nombre" : "Your name"} /><input name="email" required type="email" placeholder={es ? "Tu correo" : "Your email"} /><input name="phone" required minLength="7" placeholder={es ? "Tu teléfono" : "Your phone"} /><input name="location" required placeholder={es ? "Tu ubicación" : "Your location"} /><select name="province" value={province} onChange={(event) => setProvince(event.target.value)} required><option value="">Provincia</option>{["San José","Alajuela","Cartago","Heredia","Guanacaste","Puntarenas","Limón"].map((item) => <option key={item}>{item}</option>)}</select><select name="category" defaultValue="general"><option value="general">{es ? "Consulta general" : "General inquiry"}</option><option value="paperwork">{es ? "Trámites" : "Paperwork"}</option><option value="vehicles">{es ? "Vehículos" : "Vehicles"}</option></select><textarea name="description" required minLength="10" value={contactNote || calendarNote} onChange={(event) => { setContactNote(event.target.value); setCalendarNote(""); }} placeholder={es ? "¿En qué podemos ayudarte?" : "How can we help?"} /><label className="consent-check"><input name="consent" type="checkbox" required />Acepto que TicoListo use estos datos para gestionar mi solicitud.</label><button className="primary" type="submit" disabled={submitting}>{submitting ? (es ? "Enviando..." : "Sending...") : (es ? "Enviar solicitud" : "Send request")} →</button>{error && <p className="form-error" role="alert">{error}</p>}</form>}
+        {sent ? (
+          <div className="success" role="status">
+            ✓ {es ? "Solicitud recibida. Te contactaremos pronto." : "Request received. We will contact you soon."}
+            {chatToken && (
+              <div className="client-chat">
+                <div className="client-chat-header"><div><p className="eyebrow">Seguimiento privado</p><h3>💬 Conversación con tu gestor</h3><span className="chat-online"><i /> Canal activo · respuesta durante horario de atención</span></div><span className="chat-lock">🔒</span></div>
+                <p className="client-chat-help">Consulta el avance, envía documentos o responde a las solicitudes de tu gestor.</p>
+                <div className="chat-messages" aria-live="polite">
+                  {chatMessages.length ? chatMessages.map((item) => <div className={item.author === "Cliente" ? "chat-message mine" : "chat-message"} key={item.id}><div className="chat-message-meta"><strong>{item.author === "Cliente" ? "Tú" : item.author}</strong><time>{item.created_at ? new Intl.DateTimeFormat("es-CR", { dateStyle: "short", timeStyle: "short" }).format(new Date(item.created_at)) : ""}</time></div><span>{item.message}</span></div>) : <div className="chat-empty">Todavía no hay mensajes. Escribe para iniciar la conversación.</div>}
+                </div>
+                <form onSubmit={handleChatSubmit} className="chat-form"><input value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} placeholder="Escribe tu mensaje..." aria-label="Mensaje para el gestor" /><button className="primary" disabled={chatSending || !chatDraft.trim()}>{chatSending ? "Enviando..." : "Enviar →"}</button></form>
+              </div>
+            )}
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="assistance-form">
+            <div className="form-progress"><span className={assistanceStep >= 1 ? "active" : ""}>1. Contact</span><span className={assistanceStep >= 2 ? "active" : ""}>2. Need</span><span className={assistanceStep >= 3 ? "active" : ""}>3. Confirm</span></div>
+            <div className={assistanceStep === 1 ? "form-step" : "form-step is-hidden"}><p className="step-label">How can we contact you?</p><input name="name" required minLength="2" placeholder={es ? "Tu nombre" : "Your name"} /><input name="email" required type="email" placeholder={es ? "Tu correo" : "Your email"} /><input name="phone" required minLength="7" placeholder={es ? "Tu telefono" : "Your phone"} /><button className="primary" type="button" onClick={() => setAssistanceStep(2)}>Continue →</button></div>
+            <div className={assistanceStep === 2 ? "form-step" : "form-step is-hidden"}><p className="step-label">Tell us what you need</p><input name="location" required placeholder={es ? "Tu ubicacion" : "Your location"} /><select name="province" value={province} onChange={(event) => setProvince(event.target.value)} required><option value="">Province</option>{["San Jose","Alajuela","Cartago","Heredia","Guanacaste","Puntarenas","Limon"].map((item) => <option key={item}>{item}</option>)}</select><select name="category" defaultValue="general"><option value="general">General inquiry</option><option value="paperwork">Paperwork</option><option value="vehicles">Vehicles</option></select><textarea name="description" required minLength="10" value={contactNote} onChange={(event) => setContactNote(event.target.value)} placeholder={es ? "Como podemos ayudarte?" : "How can we help?"} /><div className="form-actions"><button className="secondary" type="button" onClick={() => setAssistanceStep(1)}>Back</button><button className="primary" type="button" onClick={() => setAssistanceStep(3)}>Review request →</button></div></div>
+            <div className={assistanceStep === 3 ? "form-step" : "form-step is-hidden"}><p className="step-label">Ready to send?</p><p className="review-copy">We will review your request and contact you soon.</p><label className="consent-check"><input name="consent" type="checkbox" required />I agree that TicoListo may use this information to manage my request.</label><div className="form-actions"><button className="secondary" type="button" onClick={() => setAssistanceStep(2)}>Edit</button><button className="primary" type="submit" disabled={submitting}>{submitting ? "Sending..." : "Send request"} →</button></div>{error && <p className="form-error" role="alert">{error}</p>}</div>
+          </form>
+        )}
       </section>
 
       <footer><span className="logo"><span className="logo-mark">T</span>TicoListo</span><span>{es ? "Una guía más clara para Costa Rica." : "A clearer guide to Costa Rica."}</span></footer>
-      {assistantOpen && <div className="assistant-card"><button className="assistant-close" onClick={() => setAssistantOpen(false)}>×</button><strong>✨ Asistente de trámites</strong>{assistantStep === 1 && <><p>¿Qué necesitas resolver?</p><div className="assistant-options">{["Licencia o vehículo","Pasaporte o cédula","Propiedad o vivienda","Negocio o Hacienda"].map((option) => <button key={option} onClick={() => { setQuery(option.split(" ")[0]); setAssistantStep(2); }}>{option}</button>)}</div></>}{assistantStep === 2 && <><p>Perfecto. Busca el resultado sugerido o selecciona un trámite del catálogo. También puedes delegarlo desde su ficha.</p><button className="primary" onClick={() => { setAssistantOpen(false); document.getElementById("services").scrollIntoView({ behavior: "smooth" }); }}>Ver trámites recomendados</button></>}</div>}
-      {selected && <div className="modal-backdrop" onClick={() => setSelected(null)}><div className="modal service-modal" onClick={(event) => event.stopPropagation()}><button className="close" onClick={() => setSelected(null)}>×</button><span className="service-icon">{selected.icon}</span><h2>{es ? selected.es : selected.title}</h2><p>{selected.text}</p><p className="service-location">Institución responsable: {selectedInstructions.institution}</p><p><a className="service-language-link" href={`${es ? "/es/servicios/" + (selected.slug_es || selected.slug) : "/en/services/" + (selected.slug_en || selected.slug)}`}>{es ? "Abrir página completa de este servicio →" : "Open full service page →"}</a></p><section className="modal-guide self-service"><h3>🌐 {es ? "OPCIÓN 1: HACERLO TÚ MISMO" : "OPTION 1: DO IT YOURSELF"}</h3><p><strong>{es ? "Requisitos y documentos:" : "Requirements and documents:"}</strong> {selectedInstructions.requirements}</p><ol>{selectedInstructions.steps.map((step) => <li key={step}>{step}</li>)}</ol><a className="official-link" href={selectedInstructions.url} target="_blank" rel="noopener noreferrer"><span>🔗</span><strong>{es ? "Ir al sitio oficial" : "Open official website"}</strong><small>Portal de {selectedInstructions.institution} ↗</small></a><small className="direct-url">URL directa: {selectedInstructions.url}</small></section><section className="modal-guide delegate-service"><h3>🤝 {es ? "OPCIÓN 2: ¿PREFIERES QUE LO HAGAMOS POR TI?" : "OPTION 2: LET US HANDLE IT"}</h3><p>{es ? "Si no tienes tiempo o prefieres acompañamiento, nuestro equipo puede encargarse del proceso y darle seguimiento." : "Our team can handle the process and follow up for you."}</p><button className="delegate-button" onClick={() => { setContactNote(`Necesito delegar el trámite: ${selected.es || selected.title}. Quiero conocer los requisitos y el costo de la asistencia.`); setSelected(null); document.getElementById("assistance").scrollIntoView({ behavior: "smooth" }); }}><span>💬</span><strong>{es ? "Contactar a un gestor" : "Contact a specialist"}</strong><small>Recibe acompañamiento personalizado →</small></button></section></div></div>}
+      {assistantOpen && <div className="assistant-card"><button className="assistant-close" onClick={() => setAssistantOpen(false)}>×</button><strong>✦ Asistente de trámites</strong>{assistantStep === 1 && <><p>¿Qué necesitas resolver?</p><div className="assistant-options">{["Licencia o vehículo", "Pasaporte o cédula", "Propiedad o vivienda", "Negocio o Hacienda"].map((option) => <button key={option} onClick={() => { setQuery(option.split(" ")[0]); setAssistantStep(2); }}>{option}</button>)}</div></>}{assistantStep === 2 && <><p>Perfecto. Busca el resultado sugerido o selecciona un trámite del catálogo. También puedes delegarlo desde su ficha.</p><button className="primary" onClick={() => { setAssistantOpen(false); document.getElementById("services").scrollIntoView({ behavior: "smooth" }); }}>Ver trámites recomendados</button></>}</div>}
+      {selected && <div className="modal-backdrop" onClick={() => setSelected(null)}><div className="modal service-modal" onClick={(event) => event.stopPropagation()}><button className="close" onClick={() => setSelected(null)}>×</button><span className="service-icon">{selected.icon}</span><h2>{es ? selected.es : selected.title}</h2><p>{selected.text}</p><p className="service-location">Institución responsable: {selectedInstructions.institution}</p><p><a className="service-language-link" href={`${es ? "/es/servicios/" + (selected.slug_es || selected.slug) : "/en/services/" + (selected.slug_en || selected.slug)}`}>{es ? "Abrir página completa de este servicio →" : "Open full service page →"}</a></p><section className="modal-guide self-service"><h3>✓ {es ? "OPCIÓN 1: HACERLO TÚ MISMO" : "OPTION 1: DO IT YOURSELF"}</h3><p><strong>{es ? "Requisitos y documentos:" : "Requirements and documents:"}</strong> {selectedInstructions.requirements}</p><ol>{selectedInstructions.steps.map((step) => <li key={step}>{step}</li>)}</ol><a className="official-link" href={selectedInstructions.url} target="_blank" rel="noopener noreferrer"><span>↗</span><strong>{es ? "Ir al sitio oficial" : "Open official website"}</strong><small>Portal de {selectedInstructions.institution} ↗</small></a><small className="direct-url">URL directa: {selectedInstructions.url}</small></section><section className="modal-guide delegate-service"><h3>★ {es ? "OPCIÓN 2: ¿PREFIERES QUE LO HAGAMOS POR TI?" : "OPTION 2: LET US HANDLE IT"}</h3><p>{es ? "Si no tienes tiempo o prefieres acompañamiento, nuestro equipo puede encargarse del proceso y darle seguimiento." : "Our team can handle the process and follow up for you."}</p><button className="delegate-button" onClick={() => { setContactNote(`Necesito delegar el trámite: ${selected.es || selected.title}. Quiero conocer los requisitos y el costo de la asistencia.`); setSelected(null); document.getElementById("assistance").scrollIntoView({ behavior: "smooth" }); }}><span>→</span><strong>{es ? "Contactar a un gestor" : "Contact a specialist"}</strong><small>Recibe acompañamiento personalizado →</small></button></section></div></div>}
     </main>
   );
 }

@@ -38,3 +38,12 @@ export function sendChatMessage(token, message) {
     body: JSON.stringify({ message }),
   });
 }
+
+// Administrative requests keep the key in the caller (sessionStorage); this
+// helper centralizes the same JSON/error behavior as the public API helpers.
+export function adminRequest(path, adminKey, options = {}) {
+  return request(path, {
+    ...options,
+    headers: { "X-Admin-Key": adminKey, ...(options.headers || {}) },
+  });
+}

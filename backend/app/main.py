@@ -6,10 +6,12 @@ from typing import AsyncGenerator
 from urllib.request import Request as UrlRequest, urlopen
 from urllib.error import HTTPError, URLError
 import asyncio
+import csv
+import io
 import json
 import logging
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -142,6 +144,23 @@ class Task(Base):
     title: Mapped[str] = mapped_column(String(220))
     due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(40), default="pending")
+    priority: Mapped[str] = mapped_column(String(20), default="normal")
+    alert_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    variables: Mapped[str] = mapped_column(Text, default="{}")
+    portal_id: Mapped[int | None] = mapped_column(nullable=True)
+    portal_status: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    portal_checked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
+class RequestAction(Base):
+    __tablename__ = "request_actions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    request_id: Mapped[int] = mapped_column(index=True)
+    action: Mapped[str] = mapped_column(String(80))
+    details: Mapped[str] = mapped_column(Text, default="{}")
+    actor: Mapped[str] = mapped_column(String(120), default="admin")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Notification(Base):
@@ -326,12 +345,64 @@ class PortalOut(BaseModel):
 class TaskIn(BaseModel):
     title: str = Field(min_length=2, max_length=220)
     due_at: datetime | None = None
+    status: str = Field(default="pending", max_length=40)
+    priority: str = Field(default="normal", max_length=20)
+    alert_at: datetime | None = None
+    variables: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+    portal_id: int | None = None
 
 
 class TaskOut(TaskIn):
     id: int
     request_id: int
     completed: bool
+    portal_status: str | None = None
+    portal_checked_at: datetime | None = None
+
+    @field_validator("variables", mode="before")
+    @classmethod
+    def decode_variables(cls, value: str | dict) -> dict:
+        if isinstance(value, str):
+            try:
+                decoded = json.loads(value)
+                return decoded if isinstance(decoded, dict) else {}
+            except json.JSONDecodeError:
+                return {}
+        return value
+
+    model_config = {"from_attributes": True}
+
+
+class TaskUpdate(BaseModel):
+    title: str | None = Field(default=None, min_length=2, max_length=220)
+    due_at: datetime | None = None
+    status: str | None = Field(default=None, max_length=40)
+    priority: str | None = Field(default=None, max_length=20)
+    completed: bool | None = None
+    alert_at: datetime | None = None
+    variables: dict[str, str | int | float | bool | None] | None = None
+    portal_id: int | None = None
+
+
+class ActionOut(BaseModel):
+    id: int
+    request_id: int
+    action: str
+    details: dict = {}
+    actor: str
+    created_at: datetime
+
+    @field_validator("details", mode="before")
+    @classmethod
+    def decode_details(cls, value: str | dict) -> dict:
+        if isinstance(value, str):
+            try:
+                decoded = json.loads(value)
+                return decoded if isinstance(decoded, dict) else {}
+            except json.JSONDecodeError:
+                return {}
+        return value
+
     model_config = {"from_attributes": True}
 
 
@@ -427,6 +498,17 @@ class ServiceUpdate(BaseModel):
 def require_admin(x_admin_key: str = Header(default="")) -> None:
     if x_admin_key != settings.admin_api_key:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
+
+
+def task_values(payload: TaskIn | TaskUpdate) -> dict:
+    values = payload.model_dump(exclude_unset=True)
+    if "variables" in values:
+        values["variables"] = json.dumps(values["variables"], ensure_ascii=False)
+    return values
+
+
+def record_action(session: AsyncSession, request_id: int, action: str, details: dict | None = None) -> RequestAction:
+    return RequestAction(request_id=request_id, action=action, details=json.dumps(details or {}, ensure_ascii=False, default=str))
 
 
 def catalog_service(slug: str, category: str, name_en: str, name_es: str, provider: str) -> dict[str, str | None]:
@@ -601,6 +683,17 @@ async def startup() -> None:
         await connection.execute(text("UPDATE assistance_requests SET chat_token = md5(random()::text || clock_timestamp()::text) WHERE chat_token IS NULL"))
         await connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_assistance_requests_chat_token ON assistance_requests (chat_token)"))
         await connection.execute(text("ALTER TABLE request_messages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()"))
+        for column, definition in (
+            ("status", "VARCHAR(40) DEFAULT 'pending'"),
+            ("priority", "VARCHAR(20) DEFAULT 'normal'"),
+            ("alert_at", "TIMESTAMP"),
+            ("variables", "TEXT DEFAULT '{}'"),
+            ("portal_id", "INTEGER"),
+            ("portal_status", "VARCHAR(30)"),
+            ("portal_checked_at", "TIMESTAMP"),
+        ):
+            await connection.execute(text(f"ALTER TABLE tasks ADD COLUMN IF NOT EXISTS {column} {definition}"))
+        await connection.execute(text("UPDATE tasks SET status = CASE WHEN completed THEN 'completed' ELSE COALESCE(status, 'pending') END, priority = COALESCE(priority, 'normal'), variables = COALESCE(variables, '{}')"))
     async with SessionLocal() as session:
         existing_slugs = set((await session.scalars(select(Service.slug))).all())
         missing_services = [
@@ -802,6 +895,7 @@ async def admin_update_request(
         updates["tags"] = ",".join(updates["tags"])
     for key, value in updates.items():
         setattr(request, key, value)
+    session.add(record_action(session, request_id, "request_updated", updates))
     await session.commit()
     await session.refresh(request)
     return request
@@ -958,12 +1052,13 @@ async def upload_document(
     safe_name = Path(file.filename or "document").name
     if len(safe_name) > 255:
         raise HTTPException(status_code=400, detail="Filename is too long")
-    storage_dir = Path("/tmp/ticolisto-documents") / str(request_id)
+    storage_dir = Path(__file__).resolve().parent.parent / "storage" / "documents" / str(request_id)
     storage_dir.mkdir(parents=True, exist_ok=True)
     destination = storage_dir / safe_name
     destination.write_bytes(await file.read())
     document = RequestDocument(request_id=request_id, filename=safe_name, storage_path=str(destination))
     session.add(document)
+    session.add(record_action(session, request_id, "document_uploaded", {"filename": safe_name}))
     await session.commit()
     await session.refresh(document)
     return document
@@ -973,11 +1068,117 @@ async def upload_document(
 async def create_task(request_id: int, payload: TaskIn, session: AsyncSession = Depends(get_session)) -> Task:
     if await session.get(AssistanceRequest, request_id) is None:
         raise HTTPException(status_code=404, detail="Assistance request not found")
-    task = Task(request_id=request_id, **payload.model_dump())
+    task = Task(request_id=request_id, **task_values(payload))
     session.add(task)
+    session.add(record_action(session, request_id, "calendar_event_created", payload.model_dump()))
     await session.commit()
     await session.refresh(task)
     return task
+
+
+@app.get("/admin/calendar/events", response_model=list[TaskOut], dependencies=[Depends(require_admin)])
+async def calendar_events(
+    start: datetime | None = Query(default=None),
+    end: datetime | None = Query(default=None),
+    status: str | None = Query(default=None, max_length=40),
+    priority: str | None = Query(default=None, max_length=20),
+    request_id: int | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+) -> list[Task]:
+    query = select(Task).order_by(Task.due_at, Task.id)
+    if start:
+        query = query.where(Task.due_at >= start)
+    if end:
+        query = query.where(Task.due_at <= end)
+    if status:
+        query = query.where(Task.status == status)
+    if priority:
+        query = query.where(Task.priority == priority)
+    if request_id:
+        query = query.where(Task.request_id == request_id)
+    return list((await session.scalars(query)).all())
+
+
+@app.patch("/admin/calendar/events/{task_id}", response_model=TaskOut, dependencies=[Depends(require_admin)])
+async def update_calendar_event(
+    task_id: int,
+    payload: TaskUpdate,
+    session: AsyncSession = Depends(get_session),
+) -> Task:
+    task = await session.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Calendar event not found")
+    values = task_values(payload)
+    if values.get("completed") is True:
+        values["status"] = "completed"
+    for key, value in values.items():
+        setattr(task, key, value)
+    session.add(record_action(session, task.request_id, "calendar_event_updated", {"task_id": task_id, **values}))
+    await session.commit()
+    await session.refresh(task)
+    return task
+
+
+@app.get("/admin/assistance-requests/{request_id}/history", response_model=list[ActionOut], dependencies=[Depends(require_admin)])
+async def request_history(request_id: int, session: AsyncSession = Depends(get_session)) -> list[RequestAction]:
+    if await session.get(AssistanceRequest, request_id) is None:
+        raise HTTPException(status_code=404, detail="Assistance request not found")
+    query = select(RequestAction).where(RequestAction.request_id == request_id).order_by(RequestAction.id.desc())
+    return list((await session.scalars(query)).all())
+
+
+@app.get("/admin/calendar/alerts", response_model=list[TaskOut], dependencies=[Depends(require_admin)])
+async def calendar_alerts(
+    before: datetime | None = Query(default=None),
+    session: AsyncSession = Depends(get_session),
+) -> list[Task]:
+    cutoff = before or datetime.utcnow()
+    query = select(Task).where(
+        Task.alert_at.is_not(None),
+        Task.alert_at <= cutoff,
+        Task.status.not_in(("completed", "cancelled")),
+    ).order_by(Task.alert_at)
+    return list((await session.scalars(query)).all())
+
+
+@app.post("/admin/calendar/events/{task_id}/verify-portal", response_model=TaskOut, dependencies=[Depends(require_admin)])
+async def verify_event_portal(task_id: int, session: AsyncSession = Depends(get_session)) -> Task:
+    task = await session.get(Task, task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Calendar event not found")
+    if task.portal_id is None:
+        raise HTTPException(status_code=400, detail="Calendar event has no portal")
+    portal = await session.get(OfficialPortal, task.portal_id)
+    if portal is None:
+        raise HTTPException(status_code=404, detail="Portal not found")
+    status, code, error = await asyncio.to_thread(check_portal, portal.url)
+    now = datetime.utcnow()
+    task.portal_status, task.portal_checked_at = status, now
+    portal.status, portal.status_code, portal.error, portal.checked_at = status, code, error, now
+    session.add(record_action(session, task.request_id, "portal_verified", {"task_id": task_id, "status": status, "status_code": code}))
+    await session.commit()
+    await session.refresh(task)
+    return task
+
+
+@app.get("/admin/calendar/export.csv", dependencies=[Depends(require_admin)])
+async def export_calendar_csv(session: AsyncSession = Depends(get_session)) -> Response:
+    tasks = list((await session.scalars(select(Task).order_by(Task.due_at, Task.id))).all())
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["event_id", "request_id", "customer", "email", "title", "due_at", "status", "priority", "alert_at", "variables"])
+    for task in tasks:
+        request = await session.get(AssistanceRequest, task.request_id)
+        writer.writerow([
+            task.id, task.request_id, request.name if request else "", request.email if request else "",
+            task.title, task.due_at.isoformat() if task.due_at else "", task.status, task.priority,
+            task.alert_at.isoformat() if task.alert_at else "", task.variables,
+        ])
+    return Response(
+        content=output.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="ticolisto-calendar.csv"'},
+    )
 
 
 @app.get("/admin/notifications", response_model=list[NotificationOut], dependencies=[Depends(require_admin)])

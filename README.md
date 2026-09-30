@@ -22,6 +22,8 @@ The public form uses `POST /assistance-requests`. Public guides expose the insti
 
 Available guide endpoints include `GET /guides` and `GET /guides/{slug}`. SEO services expose `GET /services/{language}/{slug}` and can be created or edited from the browser through `GET/POST/PUT/PATCH/DELETE /admin/services` (protected by `X-Admin-Key`). Configure `NEXT_PUBLIC_SITE_URL` with the public domain so canonical URLs, Open Graph, hreflang and the sitemap do not use localhost. The old `/guias/[slug]` route redirects to the corresponding Spanish service URL when a matching service exists.
 
+The administrative panel is separated into `/admin/clientes`, `/admin/calendario` and `/admin/seo`. The calendar section centralizes the public due-date guidance for INS, DEKRA, municipal taxes, Hacienda and CCSS. From each calendar item, an administrator can open the official portal or prepare a follow-up note in the selected client case.
+
 The platform also includes:
 
 - Daily official portal monitoring plus the protected `GET /admin/portals` and `POST /admin/portals/check` endpoints.

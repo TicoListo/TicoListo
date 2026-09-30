@@ -1,7 +1,13 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 
 function parseList(value) {
-  return (value || "").split(/\s(?=\d+\.)/).map((item) => item.replace(/^\d+\.\s*/, "").trim()).filter(Boolean);
+  return (value || "")
+    .split(/\s*(?:\d+\.\s+|[\r\n]+|[•*-]\s+)/)
+    .map((item) => item.replace(/^\d+\.\s*/, "").trim())
+    .filter(Boolean);
 }
 
 function parseFaq(value) {
@@ -15,6 +21,8 @@ function parseFaq(value) {
 }
 
 export default function ServicePage({ service, language }) {
+  const [checkedSteps, setCheckedSteps] = useState([]);
+  const [shareMessage, setShareMessage] = useState("");
   const isSpanish = language === "es";
   const name = isSpanish ? service.name_es : service.name_en;
   const description = isSpanish ? service.description_es : service.description_en;
@@ -22,6 +30,28 @@ export default function ServicePage({ service, language }) {
   const requirements = isSpanish ? service.requirements_es : service.requirements_en;
   const steps = parseList(isSpanish ? service.steps_es : service.steps_en);
   const faq = parseFaq(isSpanish ? service.faq_es : service.faq_en);
+  const requirementItems = parseList(requirements);
+  const localizedValue = (key, fallbackKeys = []) => {
+    const localized = service[`${key}_${isSpanish ? "es" : "en"}`];
+    return localized || service[key] || fallbackKeys.map((fallbackKey) => service[fallbackKey]).find(Boolean);
+  };
+  const summary = [
+    {
+      label: isSpanish ? "Tiempo estimado" : "Estimated time",
+      value: localizedValue("estimated_time", ["processing_time", "duration"]),
+      fallback: isSpanish ? "Consulta el portal" : "Check official portal",
+    },
+    {
+      label: isSpanish ? "Costo" : "Cost",
+      value: localizedValue("cost", ["price", "fee"]),
+      fallback: isSpanish ? "Puede variar" : "May vary",
+    },
+    {
+      label: isSpanish ? "Modalidad" : "Mode",
+      value: localizedValue("mode", ["service_mode", "modality"]),
+      fallback: isSpanish ? "En línea o presencial" : "Online or in person",
+    },
+  ];
   const slug = isSpanish ? service.slug_es || service.slug : service.slug_en || service.slug;
   const basePath = isSpanish ? `/es/servicios/${slug}` : `/en/services/${slug}`;
   const alternatePath = isSpanish
@@ -55,6 +85,27 @@ export default function ServicePage({ service, language }) {
       })),
     }] : []),
   ];
+  const toggleStep = (index) => {
+    setCheckedSteps((current) => current.includes(index)
+      ? current.filter((item) => item !== index)
+      : [...current, index]);
+  };
+  const sharePage = async () => {
+    const shareData = { title: name, text: description, url: window.location.href };
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+        setShareMessage(isSpanish ? "Enlace compartido" : "Link shared");
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(shareData.url);
+        setShareMessage(isSpanish ? "Enlace copiado" : "Link copied");
+      } else {
+        setShareMessage(isSpanish ? "Copia el enlace de esta página" : "Copy this page URL");
+      }
+    } catch {
+      // Sharing can be cancelled by the visitor; no error UI is needed.
+    }
+  };
 
   return (
     <main className="page-shell guide-page service-seo-page">
@@ -65,13 +116,23 @@ export default function ServicePage({ service, language }) {
         <p className="eyebrow">{service.category} · {service.provider}</p>
         <h1>{name}</h1>
         <p className="guide-institution">{description}</p>
-        <p className="service-language-link"><Link href={alternatePath}>{isSpanish ? "Read this service in English" : "Leer este servicio en español"}</Link></p>
+        <div className="service-page-actions">
+          <p className="service-language-link"><Link href={alternatePath}>{isSpanish ? "Read this service in English" : "Leer este servicio en español"}</Link></p>
+          <button type="button" className="share-button" onClick={sharePage}>↗ {isSpanish ? "Compartir" : "Share"}</button>
+          {shareMessage && <span className="share-status" role="status">{shareMessage}</span>}
+        </div>
+        <section className="service-summary" aria-label={isSpanish ? "Resumen rápido" : "Quick summary"}>
+          <h2>{isSpanish ? "Resumen rápido" : "Quick summary"}</h2>
+          <div className="service-summary-grid">
+            {summary.map((item) => <div className="service-summary-item" key={item.label}><span>{item.label}</span><strong>{item.value || item.fallback}</strong></div>)}
+          </div>
+        </section>
         {content && <section className="guide-section"><h2>{isSpanish ? "Información del servicio" : "Service information"}</h2><p>{content}</p></section>}
-        {requirements && <section className="guide-section"><h2>{isSpanish ? "Requisitos y documentos necesarios" : "Requirements and documents"}</h2><p>{requirements}</p></section>}
+        {requirements && <section className="guide-section"><h2>{isSpanish ? "Requisitos y documentos necesarios" : "Requirements and documents"}</h2><ul className="service-requirements">{requirementItems.map((item) => <li key={item}>{item}</li>)}</ul></section>}
         <section className="guide-section">
           <h2>{isSpanish ? "Cómo hacerlo por tu cuenta" : "How to do it yourself"}</h2>
-          <ol>{stepsForSchema.map((step) => <li key={step}>{step}</li>)}</ol>
-          {service.official_url && <a className="primary-button" href={service.official_url} target="_blank" rel="noreferrer">{isSpanish ? "Ir al portal oficial" : "Open official website"}</a>}
+          <ol className="service-steps">{stepsForSchema.map((step, index) => <li key={step}><label><input type="checkbox" checked={checkedSteps.includes(index)} onChange={() => toggleStep(index)} /> <span className={checkedSteps.includes(index) ? "is-complete" : ""}>{step}</span></label></li>)}</ol>
+          {service.official_url ? <a className="primary-button" href={service.official_url} target="_blank" rel="noreferrer">{isSpanish ? "Ir al sitio oficial ↗" : "Open official website ↗"}</a> : <p className="service-note">{isSpanish ? "Revisa la información oficial de la institución responsable." : "Check the responsible institution’s official information."}</p>}
         </section>
         {faq.length > 0 && <section className="guide-section"><h2>{isSpanish ? "Preguntas frecuentes" : "Frequently asked questions"}</h2>{faq.map((item) => <details key={item.question}><summary>{item.question}</summary><p>{item.answer}</p></details>)}</section>}
         <section className="guide-cta">
