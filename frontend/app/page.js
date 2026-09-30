@@ -154,6 +154,29 @@ export default function Home() {
     document.getElementById("assistance").scrollIntoView({ behavior: "smooth" });
   }
 
+  useEffect(() => {
+    if (!chatToken) return undefined;
+    const load = () => getChatMessages(chatToken).then(setChatMessages).catch(() => {});
+    load();
+    const timer = window.setInterval(load, 10000);
+    return () => window.clearInterval(timer);
+  }, [chatToken]);
+
+  async function handleChatSubmit(event) {
+    event.preventDefault();
+    if (!chatDraft.trim() || !chatToken) return;
+    setChatSending(true);
+    try {
+      const message = await sendChatMessage(chatToken, chatDraft.trim());
+      setChatMessages((items) => [...items, message]);
+      setChatDraft("");
+    } catch (chatError) {
+      setError(chatError.message);
+    } finally {
+      setChatSending(false);
+    }
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setSubmitting(true);
@@ -173,29 +196,6 @@ export default function Home() {
       setError(submissionError.message);
     } finally {
       setSubmitting(false);
-    }
-
-    useEffect(() => {
-      if (!chatToken) return undefined;
-      const load = () => getChatMessages(chatToken).then(setChatMessages).catch(() => {});
-      load();
-      const timer = window.setInterval(load, 10000);
-      return () => window.clearInterval(timer);
-    }, [chatToken]);
-
-    async function handleChatSubmit(event) {
-      event.preventDefault();
-      if (!chatDraft.trim() || !chatToken) return;
-      setChatSending(true);
-      try {
-        const message = await sendChatMessage(chatToken, chatDraft.trim());
-        setChatMessages((items) => [...items, message]);
-        setChatDraft("");
-      } catch (chatError) {
-        setError(chatError.message);
-      } finally {
-        setChatSending(false);
-      }
     }
   }
 
