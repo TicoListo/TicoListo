@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createAssistanceRequest, getChatMessages, getServices, sendChatMessage } from "./lib/api";
 
 const fallbackServices = [
@@ -76,6 +76,157 @@ const serviceOfficialDetails = {
 
 const popularServiceSlugs = ["renew-drivers-license", "passport-renewal", "lost-id", "marchamo"];
 
+function updatePhysics(stickman, deltaTime) {
+  const step = Math.min(deltaTime / 16.67, 2);
+  const walking = ["SUN_TO_HOLE", "WALK_TO_MOON", "WALK_TO_IDLE"].includes(stickman.state);
+  if (walking) {
+    stickman.x += stickman.direction * stickman.speed * step;
+    stickman.walkPhase += 0.24 * step;
+    if ((stickman.direction > 0 && stickman.x >= stickman.targetX) || (stickman.direction < 0 && stickman.x <= stickman.targetX)) {
+      stickman.x = stickman.targetX;
+    }
+  }
+  if (stickman.state === "ENTER_HOLE") {
+    stickman.x += (stickman.holeX - stickman.x) * 0.1 * step;
+    stickman.y = stickman.floor + Math.sin(stickman.progress * Math.PI / 2) * 25;
+    stickman.progress = Math.min(1, stickman.progress + 0.055 * step);
+  }
+  if (stickman.state === "EXIT_HOLE") {
+    stickman.x = stickman.holeX;
+    stickman.y = stickman.floor + 25 - Math.sin(stickman.progress * Math.PI / 2) * 25;
+    stickman.progress = Math.min(1, stickman.progress + 0.055 * step);
+  }
+  if (["SLIDE_TO_DARK", "SLIDE_TO_LIGHT"].includes(stickman.state)) {
+    stickman.orbProgress = Math.min(1, stickman.orbProgress + 0.045 * step);
+  }
+}
+
+function drawHole(context, stickman) {
+  context.save();
+  context.fillStyle = "rgba(15, 23, 42, 0.35)";
+  context.beginPath();
+  context.ellipse(stickman.holeX, stickman.floor + 3, 10, 3.5, 0, 0, Math.PI * 2);
+  context.fill();
+  context.restore();
+}
+
+function drawOrb(context, stickman) {
+  const start = stickman.state === "SLIDE_TO_DARK" ? stickman.sunX : stickman.moonX;
+  const end = stickman.state === "SLIDE_TO_LIGHT" ? stickman.sunX : stickman.moonX;
+  const orbX = ["SLIDE_TO_DARK", "SLIDE_TO_LIGHT"].includes(stickman.state)
+    ? start + (end - start) * stickman.orbProgress
+    : (stickman.theme ? stickman.moonX : stickman.sunX);
+  context.save();
+  context.fillStyle = stickman.theme ? "#cbd5e1" : "#fbbf24";
+  context.shadowColor = stickman.theme ? "rgba(226,232,240,.35)" : "rgba(251,191,36,.45)";
+  context.shadowBlur = 7;
+  context.beginPath();
+  context.arc(orbX, 15, 7, 0, Math.PI * 2);
+  context.fill();
+  if (stickman.theme) {
+    context.fillStyle = "#172337";
+    context.shadowBlur = 0;
+    context.beginPath();
+    context.arc(orbX + 3, 12, 6, 0, Math.PI * 2);
+    context.fill();
+  } else {
+    context.strokeStyle = "#f59e0b";
+    context.lineWidth = 1;
+    for (let angle = 0; angle < Math.PI * 2; angle += Math.PI / 4) {
+      context.beginPath();
+      context.moveTo(orbX + Math.cos(angle) * 9, 15 + Math.sin(angle) * 9);
+      context.lineTo(orbX + Math.cos(angle) * 11, 15 + Math.sin(angle) * 11);
+      context.stroke();
+    }
+  }
+  context.restore();
+}
+
+function drawStickman(context, stickman) {
+  const transitioning = ["SLIDE_TO_DARK", "SLIDE_TO_LIGHT"].includes(stickman.state);
+  const night = stickman.theme || stickman.state === "SLIDE_TO_DARK";
+  const progress = transitioning ? stickman.orbProgress : night ? 1 : 0;
+  const skyTop = night ? "#0f172a" : "#38bdf8";
+  const skyBottom = night ? "#1e293b" : "#bae6fd";
+  const orbStart = stickman.state === "SLIDE_TO_DARK" ? stickman.sunX : stickman.moonX;
+  const orbEnd = stickman.state === "SLIDE_TO_LIGHT" ? stickman.sunX : stickman.moonX;
+  const orbX = transitioning ? orbStart + (orbEnd - orbStart) * stickman.orbProgress : night ? stickman.moonX : stickman.sunX;
+  context.save();
+  const sky = context.createLinearGradient(0, 0, 0, 48);
+  sky.addColorStop(0, skyTop);
+  sky.addColorStop(1, skyBottom);
+  context.fillStyle = sky;
+  context.fillRect(0, 0, 56, 48);
+  context.globalAlpha = 1 - progress;
+  context.fillStyle = "#fde68a";
+  context.beginPath();
+  context.arc(7, 13, 4, 0, Math.PI * 2);
+  context.fill();
+  context.globalAlpha = progress;
+  context.fillStyle = "#f8fafc";
+  for (const star of [[7, 9], [36, 8], [49, 16], [29, 13]]) {
+    context.beginPath();
+    context.arc(star[0], star[1], star[2] || 1, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.globalAlpha = 1;
+  context.fillStyle = night ? "#172337" : "#075985";
+  context.beginPath();
+  context.moveTo(0, 48);
+  context.lineTo(0, 39);
+  context.lineTo(10, 32);
+  context.lineTo(19, 39);
+  context.lineTo(31, 26);
+  context.lineTo(43, 39);
+  context.lineTo(56, 29);
+  context.lineTo(56, 48);
+  context.closePath();
+  context.fill();
+  context.fillStyle = night ? "#0f172a" : "#064e3b";
+  context.beginPath();
+  context.moveTo(0, 48);
+  context.lineTo(0, 42);
+  context.lineTo(18, 35);
+  context.lineTo(32, 42);
+  context.lineTo(47, 35);
+  context.lineTo(56, 41);
+  context.lineTo(56, 48);
+  context.closePath();
+  context.fill();
+  context.strokeStyle = night ? "#64748b" : "#166534";
+  context.lineWidth = 1.2;
+  context.beginPath();
+  context.moveTo(47, 42);
+  context.lineTo(47, 27);
+  context.moveTo(47, 29);
+  context.quadraticCurveTo(42, 25, 40, 28);
+  context.moveTo(47, 30);
+  context.quadraticCurveTo(52, 25, 55, 28);
+  context.moveTo(47, 33);
+  context.quadraticCurveTo(43, 30, 41, 32);
+  context.stroke();
+  context.fillStyle = night ? "rgba(226,232,240,.7)" : "rgba(255,255,255,.85)";
+  context.beginPath();
+  context.arc(16, 20, 5, 0, Math.PI * 2);
+  context.arc(21, 18, 6, 0, Math.PI * 2);
+  context.arc(27, 21, 4, 0, Math.PI * 2);
+  context.fill();
+  context.fillStyle = night ? "#e2e8f0" : "#fbbf24";
+  context.shadowColor = night ? "rgba(226,232,240,.5)" : "rgba(251,191,36,.55)";
+  context.shadowBlur = 8;
+  context.beginPath();
+  context.arc(orbX, 15, 7, 0, Math.PI * 2);
+  context.fill();
+  if (night) {
+    context.fillStyle = "#172337";
+    context.shadowBlur = 0;
+    context.beginPath();
+    context.arc(orbX + 3, 12, 6, 0, Math.PI * 2);
+    context.fill();
+  }
+  context.restore();
+}
+
 function getInstructions(service) {
   const [institution, url] = serviceOfficialDetails[service.slug] || officialPortals[service.category] || ["Institución responsable", "https://www.gob.cr"];
   return {
@@ -109,12 +260,108 @@ export default function Home() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatDraft, setChatDraft] = useState("");
   const [chatSending, setChatSending] = useState(false);
+  const [catalogError, setCatalogError] = useState("");
+  const [darkMode, setDarkMode] = useState(false);
+  const stageRef = useRef(null);
+  const animationRef = useRef({ state: "IDLE", theme: false });
   const es = language === "es";
   const selectedInstructions = selected ? getInstructions(selected) : null;
 
   useEffect(() => {
+    document.body.classList.toggle("dark-mode", darkMode);
+  }, [darkMode]);
+
+  useEffect(() => {
+    const canvas = stageRef.current;
+    if (!canvas) return undefined;
+    const context = canvas.getContext("2d");
+    const stickman = {
+      x: 28, y: 34, floor: 34, homeX: 28, holeX: 44, sunX: 12, moonX: 44,
+      targetX: 28, direction: 1, speed: 1.3, walkPhase: 0, progress: 0,
+      orbProgress: 0, color: "#123b56", state: "IDLE", hidden: false, theme: false,
+    };
+    let animationFrame;
+    let lastTime = performance.now();
+    let stateStartedAt = lastTime;
+    let currentState = "IDLE";
+    function setAnimationState(nextState) {
+      currentState = nextState;
+      stickman.state = nextState;
+      animationRef.current.state = nextState;
+      stateStartedAt = performance.now();
+      stickman.progress = 0;
+      stickman.orbProgress = 0;
+      if (nextState === "ENTER_HOLE") stickman.hidden = false;
+      if (nextState === "SLIDE_TO_DARK") stickman.hidden = true;
+      if (nextState === "EXIT_HOLE") stickman.hidden = false;
+    }
+    function renderLoop(timestamp) {
+      const deltaTime = Math.min(timestamp - lastTime, 48);
+      lastTime = timestamp;
+      if (currentState !== animationRef.current.state) {
+        if (animationRef.current.state === "SUN_TO_HOLE") {
+          stickman.x = stickman.homeX;
+          stickman.targetX = stickman.holeX;
+          stickman.direction = 1;
+        }
+        setAnimationState(animationRef.current.state);
+      }
+      const elapsed = timestamp - stateStartedAt;
+      stickman.theme = animationRef.current.theme;
+      stickman.color = stickman.theme ? "#e2e8f0" : "#123b56";
+      if (currentState === "SUN_TO_HOLE" && stickman.x >= stickman.holeX) setAnimationState("ENTER_HOLE");
+      if (currentState === "ENTER_HOLE" && stickman.progress >= 1) {
+        animationRef.current.theme = true;
+        setDarkMode(true);
+        setAnimationState("SLIDE_TO_DARK");
+      }
+      if (currentState === "SLIDE_TO_DARK" && stickman.orbProgress >= 1) {
+        stickman.x = stickman.holeX;
+        setAnimationState("IDLE");
+      }
+      if (currentState === "EXIT_HOLE" && stickman.progress >= 1) {
+        stickman.targetX = stickman.moonX;
+        stickman.direction = 1;
+        setAnimationState("WALK_TO_MOON");
+      }
+      if (currentState === "WALK_TO_MOON" && stickman.x >= stickman.moonX) {
+        animationRef.current.theme = false;
+        setDarkMode(false);
+        setAnimationState("SLIDE_TO_LIGHT");
+      }
+      if (currentState === "SLIDE_TO_LIGHT" && stickman.orbProgress >= 1) {
+        stickman.targetX = stickman.homeX;
+        stickman.direction = -1;
+        setAnimationState("WALK_TO_IDLE");
+      }
+      if (currentState === "WALK_TO_IDLE" && stickman.x <= stickman.homeX) setAnimationState("IDLE");
+      updatePhysics(stickman, deltaTime);
+      context.clearRect(0, 0, canvas.width, canvas.height);
+      drawHole(context, stickman);
+      drawStickman(context, stickman);
+      animationFrame = window.requestAnimationFrame(renderLoop);
+    }
+    animationFrame = window.requestAnimationFrame(renderLoop);
+    return () => window.cancelAnimationFrame(animationFrame);
+  }, []);
+
+  function startThemeAnimation() {
+    if (animationRef.current.state !== "IDLE") return;
+    if (!animationRef.current.theme) {
+      animationRef.current.startX = animationRef.current.startX || 28;
+      animationRef.current.targetX = 44;
+      animationRef.current.direction = 1;
+      animationRef.current.x = 28;
+      animationRef.current.state = "SUN_TO_HOLE";
+      return;
+    }
+    animationRef.current.state = "EXIT_HOLE";
+  }
+
+  useEffect(() => {
     getServices().then((items) => {
       if (items.length) {
+        setCatalogError("");
         setCatalog(items.map((item) => ({
           ...item,
           title: item.name_en,
@@ -123,8 +370,12 @@ export default function Home() {
           provider: item.provider || item.location,
           icon: serviceIcons[item.slug] || "•",
         })));
+      } else {
+        setCatalogError(es ? "El catálogo completo no está disponible en este momento." : "The full catalog is temporarily unavailable.");
       }
-    }).catch(() => {});
+    }).catch(() => {
+      setCatalogError(es ? "Mostrando una selección limitada. Intenta actualizar en unos segundos." : "Showing a limited selection. Please refresh in a few seconds.");
+    });
   }, [es]);
 
   const filtered = useMemo(() => catalog.filter((service) =>
@@ -191,7 +442,13 @@ export default function Home() {
           <a href="#services">{es ? "Explorar trámites" : "Explore services"}</a>
           <a href="#assistance">{es ? "Necesito ayuda" : "I need help"}</a>
         </nav>
-        <button className="language" onClick={() => setLanguage(es ? "en" : "es")}>{es ? "EN" : "ES"} <span>⌄</span></button>
+        <div className="topbar-actions">
+          <button className="dark-mode-switch" type="button" onClick={startThemeAnimation} aria-label={darkMode ? "Cambiar a paisaje de día" : "Cambiar a paisaje nocturno"} aria-pressed={darkMode}>
+            <canvas id="stage" ref={stageRef} width="56" height="48" aria-hidden="true" />
+            <span className="dark-mode-icon" aria-hidden="true">{darkMode ? "☀" : "☾"}</span>
+          </button>
+          <button className="language" onClick={() => setLanguage(es ? "en" : "es")}>{es ? "EN" : "ES"} <span>⌄</span></button>
+        </div>
       </header>
 
       <section className="hero-banner" id="top">
@@ -229,6 +486,7 @@ export default function Home() {
             <div><p className="eyebrow">{es ? "SERVICIOS DESTACADOS" : "FEATURED SERVICES"}</p><h2>{es ? "¿Qué necesitas hacer?" : "What do you need to do?"}</h2></div>
             <span className="results-count">{filtered.length} {es ? "resultados" : "results"}</span>
           </div>
+          {catalogError && <div className="catalog-status" role="status"><span aria-hidden="true">!</span><p>{catalogError}</p><button type="button" onClick={() => window.location.reload()}>{es ? "Actualizar" : "Refresh"}</button></div>}
           <div className="service-list">
             {filtered.map((service) => (
               <button className="service-row" key={service.slug || service.category} onClick={() => setSelected(service)}>

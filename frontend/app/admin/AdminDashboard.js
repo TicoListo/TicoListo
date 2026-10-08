@@ -41,6 +41,7 @@ export default function AdminPage() {
   const [serviceEditingId, setServiceEditingId] = useState(null);
   const [serviceNotice, setServiceNotice] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [adminDarkMode, setAdminDarkMode] = useState(false);
   const selected = requests.find((item) => item.id === selectedId) || null;
   const section = pathname === "/admin/seo" ? "seo" : pathname === "/admin/calendario" ? "calendario" : pathname === "/admin/clientes" ? "clientes" : "login";
 
@@ -104,9 +105,14 @@ export default function AdminPage() {
 
   useEffect(() => {
     const savedKey = window.sessionStorage.getItem("ticolisto-admin-key") || "";
+    setAdminDarkMode(window.localStorage.getItem("ticolisto-admin-dark-mode") === "true");
     setKey(savedKey);
     setSessionReady(true);
   }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem("ticolisto-admin-dark-mode", String(adminDarkMode));
+  }, [adminDarkMode]);
 
   useEffect(() => {
     if (!sessionReady) return;
@@ -247,10 +253,16 @@ export default function AdminPage() {
   }
 
   return (
-    <main className="page-shell admin-page">
+    <main className={`page-shell admin-page${adminDarkMode ? " admin-dark" : ""}`}>
       <div className="admin-heading">
         <div><p className="eyebrow">Operaciones</p><h1>Panel administrativo</h1><p>Consulta cada caso, revisa los datos del cliente y registra el seguimiento.</p></div>
-        <a href="/" className="admin-back">← Ver sitio público</a>
+        <div className="admin-heading-actions">
+          <button type="button" className="admin-theme-toggle" onClick={() => setAdminDarkMode((enabled) => !enabled)} aria-pressed={adminDarkMode}>
+            <span aria-hidden="true">{adminDarkMode ? "☀" : "☾"}</span>
+            {adminDarkMode ? "Modo claro" : "Modo oscuro"}
+          </button>
+          <a href="/" className="admin-back">← Ver sitio público</a>
+        </div>
       </div>
       {key && section !== "login" && <nav className="admin-section-nav" aria-label="Secciones administrativas">
         <a className={section === "clientes" ? "active" : ""} href="/admin/clientes">👥 Clientes</a>
@@ -260,11 +272,17 @@ export default function AdminPage() {
       </nav>}
       {!sessionReady && <section className="admin-login-card admin-login-loading" aria-live="polite"><div className="admin-login-brand" aria-hidden="true"><span className="admin-login-mark">T</span></div><p>Preparando acceso seguro...</p></section>}
       {sessionReady && section === "login" && <section className="admin-login-card" aria-labelledby="admin-login-title">
-        <div className="admin-login-brand" aria-hidden="true"><span className="admin-login-mark">T</span></div>
+        <div className="admin-login-visual" aria-hidden="true">
+          <div className="admin-login-orbit admin-login-orbit-one" />
+          <div className="admin-login-orbit admin-login-orbit-two" />
+          <div className="admin-login-brand"><span className="admin-login-mark">T</span></div>
+          <span className="admin-login-spark admin-login-spark-one">✦</span>
+          <span className="admin-login-spark admin-login-spark-two">·</span>
+        </div>
         <div className="admin-login-copy">
-          <p className="eyebrow">Acceso protegido</p>
-          <h2 id="admin-login-title">Bienvenido al centro de operaciones</h2>
-          <p>Ingresa tu clave para gestionar solicitudes, clientes y contenido SEO.</p>
+          <p className="eyebrow">Centro de operaciones · TicoListo</p>
+          <h2 id="admin-login-title">Todo bajo control.</h2>
+          <p>Ingresa para organizar solicitudes, acompañar clientes y mantener tus trámites avanzando.</p>
         </div>
         <form onSubmit={saveKey} className="admin-login">
           <label htmlFor="admin-key">Clave de administrador
@@ -274,9 +292,10 @@ export default function AdminPage() {
               <button type="button" className="admin-key-toggle" onClick={() => setShowKey((visible) => !visible)} aria-label={showKey ? "Ocultar clave" : "Mostrar clave"}>{showKey ? "Ocultar" : "Mostrar"}</button>
             </div>
           </label>
-          <button className="primary admin-login-submit" type="submit"><span>Entrar al panel</span><span aria-hidden="true">→</span></button>
+          <button className="primary admin-login-submit" type="submit"><span>Entrar al panel</span><span className="admin-login-arrow" aria-hidden="true">→</span></button>
         </form>
-        <p className="admin-login-security"><span aria-hidden="true">🔒</span> Conexión protegida · Solo personal autorizado</p>
+        <div className="admin-login-features" aria-label="Funciones del panel"><span>✓ Clientes</span><span>✓ Seguimiento</span><span>✓ Calendario</span></div>
+        <p className="admin-login-security"><span aria-hidden="true">✦</span> Espacio privado · Solo personal autorizado</p>
       </section>}
       {error && <p role="alert" className="form-error">{error}</p>}
       {key && section === "clientes" && !error && <div className="admin-workspace">
