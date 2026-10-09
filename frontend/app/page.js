@@ -437,7 +437,7 @@ export default function Home() {
   return (
     <main>
       <header className="topbar">
-        <a className="logo" href="#top" aria-label="TicoListo home"><span className="logo-mark">T</span><span>TicoListo</span></a>
+        <a className="logo" href="#top" aria-label="TicoListo home"><img className="logo-image" src={darkMode ? "/ticolisto-logo-light.png" : "/ticolisto-logo-clean.png"} alt="TicoListo" /></a>
         <nav className="nav-links" aria-label="Main navigation">
           <a href="#services">{es ? "Explorar trámites" : "Explore services"}</a>
           <a href="#assistance">{es ? "Necesito ayuda" : "I need help"}</a>
@@ -471,6 +471,27 @@ export default function Home() {
         </div>
       </section>
 
+      <section className="category-showcase" aria-labelledby="category-title">
+        <div className="section-heading"><div><p className="eyebrow">{es ? "EXPLORA POR CATEGORÍA" : "BROWSE BY CATEGORY"}</p><h2 id="category-title">{es ? "Encuentra tu punto de partida" : "Find your starting point"}</h2></div><span>{es ? "Guías claras, paso a paso" : "Clear, step-by-step guides"}</span></div>
+        <div className="category-grid">
+          {Object.entries(categoryLabels).filter(([key]) => key !== "all").slice(0, 8).map(([key, labels]) => (
+            <button className={`category-card category-${key}`} key={key} onClick={() => { setCategory(key); document.getElementById("services").scrollIntoView({ behavior: "smooth" }); }}>
+              <span className="category-card-icon">{({ transport: "TR", vehicles: "VH", paperwork: "DOC", identity: "ID", travel: "TRIP", property: "HOME", business: "BIZ", family: "FAM" })[key]}</span>
+              <strong>{labels[es ? 0 : 1]}</strong><small>{catalog.filter((item) => item.category === key).length} {es ? "servicios" : "services"}</small><span className="category-card-arrow">↗</span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="popular-section" aria-labelledby="popular-title">
+        <div className="section-heading"><div><p className="eyebrow">{es ? "LO MÁS BUSCADO" : "POPULAR SERVICES"}</p><h2 id="popular-title">{es ? "Trámites que más consultan" : "Most requested services"}</h2></div><span>{es ? "Accesos rápidos para empezar" : "Quick ways to get started"}</span></div>
+        <div className="popular-grid">
+          {catalog.filter((service, index) => popularServiceSlugs.includes(service.slug) || (!service.slug && index < 4)).slice(0, 4).map((service) => (
+            <button className="popular-card" key={service.slug} onClick={() => setSelected(service)}><span className="row-icon">{service.icon}</span><span><strong>{es ? service.es : service.title}</strong><small>{service.provider || service.location}</small></span><span className="row-arrow">›</span></button>
+          ))}
+        </div>
+      </section>
+
       <section className="catalog-layout" id="services">
         <aside className="filters">
           <div className="filter-heading"><strong>{es ? "Categorías" : "Categories"}</strong><span>{filtered.length}</span></div>
@@ -500,27 +521,6 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="category-showcase" aria-labelledby="category-title">
-        <div className="section-heading"><div><p className="eyebrow">{es ? "EXPLORA POR CATEGORÍA" : "BROWSE BY CATEGORY"}</p><h2 id="category-title">{es ? "Encuentra tu punto de partida" : "Find your starting point"}</h2></div><span>{es ? "Guías claras, paso a paso" : "Clear, step-by-step guides"}</span></div>
-        <div className="category-grid">
-          {Object.entries(categoryLabels).filter(([key]) => key !== "all").slice(0, 8).map(([key, labels]) => (
-            <button className={`category-card category-${key}`} key={key} onClick={() => { setCategory(key); document.getElementById("services").scrollIntoView({ behavior: "smooth" }); }}>
-              <span className="category-card-icon">{({ transport: "TR", vehicles: "VH", paperwork: "DOC", identity: "ID", travel: "TRIP", property: "HOME", business: "BIZ", family: "FAM" })[key]}</span>
-              <strong>{labels[es ? 0 : 1]}</strong><small>{catalog.filter((item) => item.category === key).length} {es ? "servicios" : "services"}</small><span className="category-card-arrow">↗</span>
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="popular-section" aria-labelledby="popular-title">
-        <div className="section-heading"><div><p className="eyebrow">{es ? "LO MÁS BUSCADO" : "POPULAR SERVICES"}</p><h2 id="popular-title">{es ? "Trámites que más consultan" : "Most requested services"}</h2></div><span>{es ? "Accesos rápidos para empezar" : "Quick ways to get started"}</span></div>
-        <div className="popular-grid">
-          {catalog.filter((service, index) => popularServiceSlugs.includes(service.slug) || (!service.slug && index < 4)).slice(0, 4).map((service) => (
-            <button className="popular-card" key={service.slug} onClick={() => setSelected(service)}><span className="row-icon">{service.icon}</span><span><strong>{es ? service.es : service.title}</strong><small>{service.provider || service.location}</small></span><span className="row-arrow">›</span></button>
-          ))}
-        </div>
-      </section>
-
       <section className="assistance" id="assistance">
         <div><p className="eyebrow">TICOLISTO CONCIERGE</p><h2>{es ? "¿No encuentras lo que buscas?" : "Can't find what you need?"}</h2><p>{es ? "Cuéntanos qué necesitas y te ayudamos a ordenar los siguientes pasos." : "Tell us what you need and we'll help you find the next step."}</p></div>
         {sent ? (
@@ -547,7 +547,7 @@ export default function Home() {
         )}
       </section>
 
-      <footer><span className="logo"><span className="logo-mark">T</span>TicoListo</span><span>{es ? "Una guía más clara para Costa Rica." : "A clearer guide to Costa Rica."}</span></footer>
+      <footer><span className="logo"><img className="logo-image" src={darkMode ? "/ticolisto-logo-light.png" : "/ticolisto-logo-clean.png"} alt="TicoListo" /></span><span>{es ? "Una guía más clara para Costa Rica." : "A clearer guide to Costa Rica."}</span></footer>
       {assistantOpen && <div className="assistant-card"><button className="assistant-close" onClick={() => setAssistantOpen(false)}>×</button><strong>✦ Asistente de trámites</strong>{assistantStep === 1 && <><p>¿Qué necesitas resolver?</p><div className="assistant-options">{["Licencia o vehículo", "Pasaporte o cédula", "Propiedad o vivienda", "Negocio o Hacienda"].map((option) => <button key={option} onClick={() => { setQuery(option.split(" ")[0]); setAssistantStep(2); }}>{option}</button>)}</div></>}{assistantStep === 2 && <><p>Perfecto. Busca el resultado sugerido o selecciona un trámite del catálogo. También puedes delegarlo desde su ficha.</p><button className="primary" onClick={() => { setAssistantOpen(false); document.getElementById("services").scrollIntoView({ behavior: "smooth" }); }}>Ver trámites recomendados</button></>}</div>}
       {selected && <div className="modal-backdrop" onClick={() => setSelected(null)}><div className="modal service-modal" onClick={(event) => event.stopPropagation()}><button className="close" onClick={() => setSelected(null)}>×</button><span className="service-icon">{selected.icon}</span><h2>{es ? selected.es : selected.title}</h2><p>{selected.text}</p><p className="service-location">Institución responsable: {selectedInstructions.institution}</p><p><a className="service-language-link" href={`${es ? "/es/servicios/" + (selected.slug_es || selected.slug) : "/en/services/" + (selected.slug_en || selected.slug)}`}>{es ? "Abrir página completa de este servicio →" : "Open full service page →"}</a></p><section className="modal-guide self-service"><h3>✓ {es ? "OPCIÓN 1: HACERLO TÚ MISMO" : "OPTION 1: DO IT YOURSELF"}</h3><p><strong>{es ? "Requisitos y documentos:" : "Requirements and documents:"}</strong> {selectedInstructions.requirements}</p><ol>{selectedInstructions.steps.map((step) => <li key={step}>{step}</li>)}</ol><a className="official-link" href={selectedInstructions.url} target="_blank" rel="noopener noreferrer"><span>↗</span><strong>{es ? "Ir al sitio oficial" : "Open official website"}</strong><small>Portal de {selectedInstructions.institution} ↗</small></a><small className="direct-url">URL directa: {selectedInstructions.url}</small></section><section className="modal-guide delegate-service"><h3>★ {es ? "OPCIÓN 2: ¿PREFIERES QUE LO HAGAMOS POR TI?" : "OPTION 2: LET US HANDLE IT"}</h3><p>{es ? "Si no tienes tiempo o prefieres acompañamiento, nuestro equipo puede encargarse del proceso y darle seguimiento." : "Our team can handle the process and follow up for you."}</p><button className="delegate-button" onClick={() => { setContactNote(`Necesito delegar el trámite: ${selected.es || selected.title}. Quiero conocer los requisitos y el costo de la asistencia.`); setSelected(null); document.getElementById("assistance").scrollIntoView({ behavior: "smooth" }); }}><span>→</span><strong>{es ? "Contactar a un gestor" : "Contact a specialist"}</strong><small>Recibe acompañamiento personalizado →</small></button></section></div></div>}
     </main>

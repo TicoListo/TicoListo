@@ -270,12 +270,12 @@ export default function AdminPage() {
         <a className={section === "seo" ? "active" : ""} href="/admin/seo">📈 Posicionamiento SEO</a>
         <button type="button" onClick={logout}>🔒 Cerrar sesión</button>
       </nav>}
-      {!sessionReady && <section className="admin-login-card admin-login-loading" aria-live="polite"><div className="admin-login-brand" aria-hidden="true"><span className="admin-login-mark">T</span></div><p>Preparando acceso seguro...</p></section>}
+      {!sessionReady && <section className="admin-login-card admin-login-loading" aria-live="polite"><div className="admin-login-brand" aria-hidden="true"><img className="admin-logo-image" src={adminDarkMode ? "/ticolisto-logo-light.png" : "/ticolisto-logo-clean.png"} alt="" /></div><p>Preparando acceso seguro...</p></section>}
       {sessionReady && section === "login" && <section className="admin-login-card" aria-labelledby="admin-login-title">
         <div className="admin-login-visual" aria-hidden="true">
           <div className="admin-login-orbit admin-login-orbit-one" />
           <div className="admin-login-orbit admin-login-orbit-two" />
-          <div className="admin-login-brand"><span className="admin-login-mark">T</span></div>
+          <div className="admin-login-brand"><img className="admin-logo-image" src={adminDarkMode ? "/ticolisto-logo-light.png" : "/ticolisto-logo-clean.png"} alt="" /></div>
           <span className="admin-login-spark admin-login-spark-one">✦</span>
           <span className="admin-login-spark admin-login-spark-two">·</span>
         </div>
