@@ -136,23 +136,6 @@ const serviceOfficialDetails = {
   "ccss-sick-leave": ["Caja Costarricense de Seguro Social", "https://edus.ccss.sa.cr"],
 };
 
-const serviceOfficialSources = {
-  "airport-transfer": [["Aeropuerto Daniel Oduber Quirós (LIR)", "https://www.aeropuertoliberia.com"]],
-  "paperwork-help": [["Gobierno de Costa Rica", "https://www.costarica.go.cr"]],
-  "health-navigation": [["Ministerio de Salud", "https://www.ministeriodesalud.go.cr"]],
-  "renew-drivers-license": [["Banco de Costa Rica / Punto BCR", "https://www.bancobcr.com"]],
-  "first-drivers-license": [["Banco de Costa Rica / Punto BCR", "https://www.bancobcr.com"]],
-  "short-stay-rental": [["Ministerio de Hacienda", "https://www.hacienda.go.cr"], ["Instituto Costarricense de Turismo (ICT)", "https://www.ict.go.cr"]],
-  "create-company": [["Ventanilla Única de Inversión (VUI)", "https://www.vui.cr"], ["Registro Nacional", "https://www.rnpdigital.com"]],
-  "tax-obligations": [["Ministerio de Hacienda", "https://www.hacienda.go.cr"]],
-  "health-permit": [["Ministerio de Salud / TramitesSalud", "https://www.tramitessalud.go.cr"]],
-  "self-employed": [["Ministerio de Hacienda", "https://www.hacienda.go.cr"], ["CCSS", "https://www.ccss.sa.cr"]],
-  "buy-property": [["Municipalidad correspondiente", "https://www.costarica.go.cr"]],
-  "sell-property": [["Municipalidad correspondiente", "https://www.costarica.go.cr"]],
-  "municipal-license": [["Municipalidad correspondiente", "https://www.costarica.go.cr"]],
-  "dismissal-next-steps": [["Ministerio de Trabajo y Seguridad Social (MTSS)", "https://www.mtss.go.cr"]],
-};
-
 const popularServiceSlugs = ["renew-drivers-license", "passport-renewal", "lost-id", "marchamo"];
 
 function updatePhysics(stickman, deltaTime) {
@@ -310,8 +293,7 @@ function getInstructions(service) {
   const knownDetails = serviceOfficialDetails[service.slug] || [];
   const institution = knownDetails[0] || "Institución responsable";
   const url = service.official_url || knownDetails[1] || null;
-  const sources = [[institution, url], ...(serviceOfficialSources[service.slug] || [])]
-    .filter(([, sourceUrl], index, items) => sourceUrl && items.findIndex(([, candidate]) => candidate === sourceUrl) === index);
+  const sources = url ? [[institution, url]] : [];
   return {
     institution: service.provider || institution,
     url,
