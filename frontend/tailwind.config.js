@@ -7,8 +7,8 @@ module.exports = {
         brand: {
           100: "#F4F6F9",
           200: "#E9ECEF",
-          300: "#22C55E",
-          400: "#22C55E",
+          300: "#8B5CF6",
+          400: "#8B5CF6",
           500: "#0284C7",
           600: "#0284C7",
           700: "#0284C7",
@@ -21,7 +21,7 @@ module.exports = {
         ink: "#0284C7",
         cream: "#F8F9FA",
         mint: "#F4F6F9",
-        gold: "#22C55E",
+        gold: "#8B5CF6",
       },
       fontFamily: {
         display: ["Georgia", "serif"],
