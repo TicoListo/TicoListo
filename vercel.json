@@ -16,6 +16,10 @@
       "destination": "/api/index.py?path=admin/:path*"
     },
     {
+      "source": "/api/site-config/:path*",
+      "destination": "/api/index.py?path=site-config/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index.py?path=:path*"
     }
