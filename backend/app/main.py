@@ -10,6 +10,7 @@ import csv
 import io
 import json
 import logging
+import os
 
 from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -657,6 +658,7 @@ app.add_middleware(
 
 @app.on_event("startup")
 async def startup() -> None:
+    global portal_monitor_task
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
         await connection.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS provider VARCHAR(180)"))
@@ -716,8 +718,8 @@ async def startup() -> None:
         if missing_portals:
             session.add_all(missing_portals)
             await session.commit()
-    global portal_monitor_task
-    portal_monitor_task = asyncio.create_task(portal_monitor_loop())
+    if not os.getenv("VERCEL"):
+        portal_monitor_task = asyncio.create_task(portal_monitor_loop())
 
 
 async def portal_monitor_loop() -> None:

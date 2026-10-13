@@ -315,6 +315,7 @@ function getInstructions(service) {
 export default function Home() {
   const [catalog, setCatalog] = useState(fallbackServices);
   const [language, setLanguage] = useState("es");
+  const [languageMenuOpen, setLanguageMenuOpen] = useState(false);
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
@@ -468,8 +469,9 @@ export default function Home() {
     }]);
   }
 
-  function toggleLanguage() {
-    setLanguage(es ? "en" : "es");
+  function selectLanguage(nextLanguage) {
+    setLanguage(nextLanguage);
+    setLanguageMenuOpen(false);
     setAssistantMessages([]);
     setAssistantDraft("");
   }
@@ -558,7 +560,29 @@ export default function Home() {
             <canvas id="stage" ref={stageRef} width="56" height="48" aria-hidden="true" />
             <span className="dark-mode-icon" aria-hidden="true">{darkMode ? "☀" : "☾"}</span>
           </button>
-          <button className="language" onClick={toggleLanguage}>{es ? "EN" : "ES"} <span>⌄</span></button>
+          <div className={`language-picker ${languageMenuOpen ? "is-open" : ""}`}>
+            <button
+              className="language-picker-toggle"
+              type="button"
+              onClick={() => setLanguageMenuOpen((open) => !open)}
+              aria-expanded={languageMenuOpen}
+              aria-haspopup="listbox"
+              aria-label={es ? "Seleccionar idioma" : "Select language"}
+            >
+              <span className={`flag flag-${language}`} aria-hidden="true" />
+              <span className="language-current">{es ? "ES" : "EN"}</span>
+              <span className="language-chevron" aria-hidden="true">⌄</span>
+            </button>
+            {languageMenuOpen && <div className="language-menu" role="listbox" aria-label={es ? "Idiomas disponibles" : "Available languages"}>
+              <p>{es ? "IDIOMA" : "LANGUAGE"}</p>
+              <button className={es ? "language-option selected" : "language-option"} type="button" role="option" aria-selected={es} onClick={() => selectLanguage("es")}>
+                <span className="language-label">ESPAÑOL</span><span className="flag flag-es" aria-hidden="true" /><strong>ES</strong>
+              </button>
+              <button className={!es ? "language-option selected" : "language-option"} type="button" role="option" aria-selected={!es} onClick={() => selectLanguage("en")}>
+                <span className="language-label">ENGLISH</span><span className="flag flag-en" aria-hidden="true" /><strong>EN</strong>
+              </button>
+            </div>}
+          </div>
         </div>
       </header>
 

@@ -1,0 +1,10 @@
+{
+  "buildCommand": "npm --prefix frontend run build",
+  "outputDirectory": "frontend/.next",
+  "framework": "nextjs",
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 30
+    }
+  }
+}

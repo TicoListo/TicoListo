@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+backend/.env
+frontend/.env
+frontend/.vercel
+node_modules/
+frontend/.next/
+__pycache__/
+*.py[cod]
+.venv/

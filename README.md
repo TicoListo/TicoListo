@@ -36,3 +36,28 @@ The platform also includes:
 Personal data is restricted to the protected admin API. Before production, configure HTTPS, a real identity provider, encrypted object storage, retention/deletion workflows and a privacy notice/consent policy.
 
 The frontend uses Tailwind CSS for the shared visual system. From `frontend/`, run `npm install` and `npm run dev` for local development. The full stack remains available with `docker compose up --build`.
+
+## Production deployment with Supabase and Vercel
+
+The production deployment uses only two services:
+
+1. Create or select the Supabase project and use its **pooler** PostgreSQL
+   connection string for `DATABASE_URL`, changing the scheme to
+   `postgresql+asyncpg://`. The current Vercel-compatible project entry point
+   is `api/index.py`; it exposes the FastAPI application as Vercel's Python
+   function.
+2. Import the repository into Vercel. Keep the repository root as the project
+   root (do not set `frontend` as the Root Directory), then configure:
+   `DATABASE_URL`, `ADMIN_API_KEY`, `CORS_ORIGINS`, `NEXT_PUBLIC_API_URL=/api`,
+   `API_SERVER_URL=https://YOUR-VERCEL-DOMAIN.vercel.app/api` and
+   `NEXT_PUBLIC_SITE_URL=https://YOUR-VERCEL-DOMAIN.vercel.app`.
+3. Vercel builds Next.js from `frontend/` using the root `vercel.json` and
+   serves FastAPI under `/api`. Supabase supplies PostgreSQL only.
+
+The portal monitor is disabled on Vercel because serverless functions cannot
+maintain an infinite background task. Use the protected portal-check endpoint
+from a scheduled external call if continuous monitoring is required.
+
+Do not use `localhost` or the local `dev-admin-key` in production. Copy the
+example variables from `backend/.env.example` and `frontend/.env.example`;
+never commit real credentials.
