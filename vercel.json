@@ -4,6 +4,10 @@
   "framework": "nextjs",
   "rewrites": [
     {
+      "source": "/api/admin/:path*",
+      "destination": "/api/index.py?path=admin/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index.py?path=:path*"
     }
