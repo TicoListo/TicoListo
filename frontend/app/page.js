@@ -734,6 +734,14 @@ export default function Home() {
               {categoryTheme.show_arrow && <span className="category-card-action">{es ? "Ver categoría" : "View category"} <span aria-hidden="true">↗</span></span>}
             </button>
           ))}
+          <button className="category-card category-dekra" type="button" onClick={startDekraAssistance}>
+            <span className="category-card-topline">
+              <span className="category-card-icon" aria-hidden="true">🚗</span>
+              <span className="category-card-count">★</span>
+            </span>
+            <span className="category-card-copy"><strong>{es ? "Asistencia DEKRA" : "DEKRA assistance"}</strong><small>{es ? "Llevamos tu carro por ti" : "We take your car for you"}</small></span>
+            {categoryTheme.show_arrow && <span className="category-card-action">{es ? "Solicitar asistencia" : "Request assistance"} <span aria-hidden="true">↗</span></span>}
+          </button>
         </div>
         <div className="category-chip-nav" role="tablist" aria-label={es ? "Filtrar por categoría" : "Filter by category"}>
           {Object.entries(categoryLabels).map(([key, labels]) => (
