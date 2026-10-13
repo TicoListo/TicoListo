@@ -12,7 +12,7 @@ import json
 import logging
 import os
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Response, UploadFile
+from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -658,6 +658,14 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def normalize_vercel_path(request: Request, call_next):
+    route = request.query_params.get("...path")
+    if route:
+        request.scope["path"] = f"/{route.lstrip('/')}"
+    return await call_next(request)
 
 
 @app.on_event("startup")
