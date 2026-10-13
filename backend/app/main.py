@@ -33,7 +33,10 @@ settings = Settings()
 engine = create_async_engine(
     settings.database_url,
     pool_pre_ping=True,
-    connect_args={"prepared_statement_cache_size": 0},
+    connect_args={
+        "prepared_statement_cache_size": 0,
+        "statement_cache_size": 0,
+    },
 )
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 portal_monitor_task: asyncio.Task | None = None
