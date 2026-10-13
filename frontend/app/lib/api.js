@@ -18,23 +18,23 @@ async function request(path, options = {}) {
   }
 
   export function registerAccount(payload) {
-    return request("/auth/register", { method: "POST", body: JSON.stringify(payload) });
+    return request("/auth-register", { method: "POST", body: JSON.stringify(payload) });
   }
 
   export function loginAccount(payload) {
-    return request("/auth/login", { method: "POST", body: JSON.stringify(payload) });
+    return request("/auth-login", { method: "POST", body: JSON.stringify(payload) });
   }
 
   export function getCurrentUser() {
-    return request("/auth/me");
+    return request("/auth-me");
   }
 
   export function logoutAccount() {
-    return request("/auth/logout", { method: "POST" });
+    return request("/auth-logout", { method: "POST" });
   }
 
   export function getMyAssistanceRequests() {
-    return request("/me/assistance-requests");
+    return request("/my-requests");
   }
 
   return response.status === 204 ? null : response.json();

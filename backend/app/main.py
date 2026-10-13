@@ -943,6 +943,38 @@ async def my_assistance_requests(
     return list((await session.scalars(query)).all())
 
 
+@app.post("/auth-register", response_model=UserOut, status_code=201)
+async def auth_register_alias(payload: RegisterIn, response: Response, session: AsyncSession = Depends(get_session)) -> User:
+    return await register(payload, response, session)
+
+
+@app.post("/auth-login", response_model=UserOut)
+async def auth_login_alias(payload: LoginIn, response: Response, session: AsyncSession = Depends(get_session)) -> User:
+    return await login(payload, response, session)
+
+
+@app.get("/auth-me", response_model=UserOut)
+async def auth_me_alias(user: User = Depends(get_current_user)) -> User:
+    return user
+
+
+@app.post("/auth-logout", status_code=204)
+async def auth_logout_alias(
+    response: Response,
+    session_token: str | None = Cookie(default=None, alias=settings.auth_cookie_name),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    return await logout(response, session_token, session)
+
+
+@app.get("/my-requests", response_model=list[AssistanceRequestOut])
+async def my_requests_alias(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[AssistanceRequest]:
+    return await my_assistance_requests(user, session)
+
+
 def check_portal(url: str) -> tuple[str, int | None, str | None]:
     try:
         request = UrlRequest(url, method="HEAD", headers={"User-Agent": "TicoListo-PortalMonitor/1.0"})
