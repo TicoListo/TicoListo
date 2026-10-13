@@ -4,6 +4,14 @@
   "framework": "nextjs",
   "rewrites": [
     {
+      "source": "/api/auth/:path*",
+      "destination": "/api/index.py?path=auth/:path*"
+    },
+    {
+      "source": "/api/me/:path*",
+      "destination": "/api/index.py?path=me/:path*"
+    },
+    {
       "source": "/api/admin/:path*",
       "destination": "/api/index.py?path=admin/:path*"
     },
