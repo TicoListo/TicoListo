@@ -54,6 +54,8 @@ The production deployment uses only two services:
 3. Set Vercel's Root Directory to `.`. Vercel builds Next.js from `frontend/`
    using the root `vercel.json` and
    serves FastAPI under `/api`. Supabase supplies PostgreSQL only.
+4. Redeploy after saving the variables and verify `/api/health` returns JSON
+   before testing the public catalog.
 
 The portal monitor is disabled on Vercel because serverless functions cannot
 maintain an infinite background task. Use the protected portal-check endpoint
