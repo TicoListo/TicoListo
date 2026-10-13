@@ -30,14 +30,7 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-engine = create_async_engine(
-    settings.database_url,
-    pool_pre_ping=True,
-    connect_args={
-        "prepared_statement_cache_size": 0,
-        "statement_cache_size": 0,
-    },
-)
+engine = create_async_engine(settings.database_url, pool_pre_ping=True)
 SessionLocal = async_sessionmaker(engine, expire_on_commit=False)
 portal_monitor_task: asyncio.Task | None = None
 logger = logging.getLogger("ticolisto")
