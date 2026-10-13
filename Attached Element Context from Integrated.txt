@@ -1,0 +1,62 @@
+Attached Element Context from Integrated Browser
+
+Element: section#services.catalog-layout
+
+URL: http://localhost:3000/
+
+HTML Path: main.category-theme-glass > section#services.catalog-layout
+
+Outer HTML:
+```html
+<section class="catalog-layout" id="services"><aside class="filters"><div class="filter-heading"><strong>Categorías</strong><span>0</span></div><button class="filter"><span>Todos los trámites</span><span class="filter-arrow">›</span></button><button class="filter"><span>Transporte</span><span class="filter-arrow">›</span></button><button class="filter active"><span>Vehículos</span><span class="filter-arrow">›</span></button><button class="filter"><span>Documentos</span><span class="filter-arrow">›</span></button><button class="filter"><span>Identidad</span><span class="filter-arrow">›</span></button><button class="filter"><span>Viajes</span><span class="filter-arrow">›</span></button><button class="filter"><span>Propiedades</span><span class="filter-arrow">›</span></button><button class="filter"><span>Negocios</span><span class="filter-arrow">›</span></button><button class="filter"><span>Familia</span><span class="filter-arrow">›</span></button><button class="filter"><span>Trabajo</span><span class="filter-arrow">›</span></button><button class="filter"><span>Salud</span><span class="filter-arrow">›</span></button><button class="filter"><span>Vivienda</span><span class="filter-arrow">›</span></button></aside><div class="results"><div class="results-header"><div><p class="eyebrow">SERVICIOS DESTACADOS</p><h2>¿Qué necesitas hacer?</h2></div><span class="results-count">0<!-- --> <!-- -->resultados</span></div><div class="catalog-status" role="status"><span aria-hidden="true">!</span><p>Mostrando una selección limitada. Intenta actualizar en unos segundos.</p><button type="button">Actualizar</button></div><div class="service-list is-filtered"></div><div class="empty-state"><span class="empty-icon">⌕</span><h3>No encontramos resultados</h3><p>Prueba con otra palabra o explora una categoría para encontrar una guía útil.</p><button class="secondary">Ver todos los servicios</button></div></div></section>
+```
+
+Dimensions:
+- top: -8px
+- left: 0px
+- width: 596px
+- height: 612px
+
+CSS:
+```css
+*, :before, :after, ::backdrop { --tw-border-spacing-x:0;--tw-border-spacing-y:0;--tw-translate-x:0;--tw-translate-y:0;--tw-rotate:0;--tw-skew-x:0;--tw-skew-y:0;--tw-scale-x:1;--tw-scale-y:1;--tw-pan-x: ;--tw-pan-y: ;--tw-pinch-zoom: ;--tw-scroll-snap-strictness:proximity;--tw-gradient-from-position: ;--tw-gradient-via-position: ;--tw-gradient-to-position: ;--tw-ordinal: ;--tw-slashed-zero: ;--tw-numeric-figure: ;--tw-numeric-spacing: ;--tw-numeric-fraction: ;--tw-ring-inset: ;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-color:#3b82f680;--tw-ring-offset-shadow:0 0 #0000;--tw-ring-shadow:0 0 #0000;--tw-shadow:0 0 #0000;--tw-shadow-colored:0 0 #0000;--tw-blur: ;--tw-brightness: ;--tw-contrast: ;--tw-grayscale: ;--tw-hue-rotate: ;--tw-invert: ;--tw-saturate: ;--tw-sepia: ;--tw-drop-shadow: ;--tw-backdrop-blur: ;--tw-backdrop-brightness: ;--tw-backdrop-contrast: ;--tw-backdrop-grayscale: ;--tw-backdrop-hue-rotate: ;--tw-backdrop-invert: ;--tw-backdrop-opacity: ;--tw-backdrop-saturate: ;--tw-backdrop-sepia: ;--tw-contain-size: ;--tw-contain-layout: ;--tw-contain-paint: ;--tw-contain-style: }
+*, :before, :after { box-sizing:border-box;border:0 solid #e5e7eb }
+* { box-sizing:border-box }
+.catalog-layout { grid-template-columns:215px 1fr;gap:38px;padding:137px 62px 60px;display:grid }
+.catalog-layout { grid-template-columns:1fr;gap:26px;padding:132px 24px 45px }
+.catalog-layout { padding-top:137px }
+.catalog-layout { padding-top:151px }
+.catalog-layout { padding-top:145px }
+.catalog-layout { padding:48px 20px 45px }
+
+/* Pseudo-elements */
+:before, :after { --tw-content:"" }
+
+/* Inherited */
+main:not(.admin-page), .page-shell.guide-page { font-family:ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,sans-serif }
+main:not(.admin-page) { color:#123b56 }
+body { line-height:inherit }
+body { color:var(--ink); font-family:Inter,Arial,Helvetica,sans-serif }
+body, button, input, select, textarea { font-family:Inter,Arial,Helvetica,sans-serif }
+html, :host { tab-size:4; font-feature-settings:normal; font-family:Arial,Helvetica,sans-serif; line-height:1.5 }
+
+/* Resolved values */
+padding: 48px 20px 45px;
+border: 0px solid rgb(229, 231, 235);
+box-sizing: border-box;
+color: rgb(18, 59, 86);
+column-gap: 26px;
+display: grid;
+font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+font-feature-settings: normal;
+grid-template-columns: 556px;
+height: 612.375px;
+line-height: 24px;
+row-gap: 26px;
+tab-size: 4;
+unicode-bidi: isolate /*UA*/;
+width: 596px;
+
+/* CSS variables */
+--ink: #0a2540;
+```
