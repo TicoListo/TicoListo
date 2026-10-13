@@ -51,7 +51,8 @@ The production deployment uses only two services:
    `DATABASE_URL`, `ADMIN_API_KEY`, `CORS_ORIGINS`, `NEXT_PUBLIC_API_URL=/api`,
    `API_SERVER_URL=https://YOUR-VERCEL-DOMAIN.vercel.app/api` and
    `NEXT_PUBLIC_SITE_URL=https://YOUR-VERCEL-DOMAIN.vercel.app`.
-3. Vercel builds Next.js from `frontend/` using the root `vercel.json` and
+3. Set Vercel's Root Directory to `.`. Vercel builds Next.js from `frontend/`
+   using the root `vercel.json` and
    serves FastAPI under `/api`. Supabase supplies PostgreSQL only.
 
 The portal monitor is disabled on Vercel because serverless functions cannot
