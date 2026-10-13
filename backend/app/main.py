@@ -1,5 +1,5 @@
 from enum import Enum
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 from pathlib import Path
 from typing import AsyncGenerator
@@ -7,12 +7,14 @@ from urllib.request import Request as UrlRequest, urlopen
 from urllib.error import HTTPError, URLError
 import asyncio
 import csv
+import hashlib
 import io
 import json
 import logging
 import os
+import secrets
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile
+from fastapi import Cookie, Depends, FastAPI, File, Header, HTTPException, Query, Request, Response, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -26,6 +28,7 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+asyncpg://ticolisto:ticolisto@localhost:5432/ticolisto"
     cors_origins: str = "http://localhost:3000"
     admin_api_key: str = "dev-admin-key"
+    auth_cookie_name: str = "ticolisto_session"
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
 
@@ -105,6 +108,28 @@ class AssistanceRequest(Base):
     consent: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     chat_token: Mapped[str] = mapped_column(String(64), unique=True, index=True, default=lambda: uuid4().hex)
+    user_id: Mapped[int | None] = mapped_column(nullable=True, index=True)
+
+
+class User(Base):
+    __tablename__ = "users"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True)
+    full_name: Mapped[str] = mapped_column(String(120))
+    phone: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    password_hash: Mapped[str] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(30), default="user", server_default="user")
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class UserSession(Base):
+    __tablename__ = "user_sessions"
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Guide(Base):
@@ -254,6 +279,34 @@ class AssistanceRequestIn(BaseModel):
     province: str | None = Field(default=None, max_length=80)
     tags: list[str] = Field(default_factory=list, max_length=20)
     consent: bool = False
+
+
+class RegisterIn(BaseModel):
+    full_name: str = Field(min_length=2, max_length=120)
+    email: EmailStr
+    password: str = Field(min_length=10, max_length=128)
+    phone: str | None = Field(default=None, max_length=40)
+
+
+class LoginIn(BaseModel):
+    email: EmailStr
+    password: str = Field(min_length=1, max_length=128)
+
+
+class UserOut(BaseModel):
+    id: int
+    email: EmailStr
+    full_name: str
+    phone: str | None = None
+    role: str
+    is_active: bool
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+class RoleUpdateIn(BaseModel):
+    role: str = Field(pattern="^(user|manager|admin)$")
 
 
 class AssistanceRequestOut(BaseModel):
@@ -647,12 +700,93 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
+def hash_password(password: str, salt: bytes | None = None) -> str:
+    salt = salt or secrets.token_bytes(16)
+    digest = hashlib.scrypt(password.encode("utf-8"), salt=salt, n=16384, r=8, p=1)
+    return f"scrypt${salt.hex()}${digest.hex()}"
+
+
+def verify_password(password: str, encoded: str) -> bool:
+    try:
+        algorithm, salt_hex, digest_hex = encoded.split("$", 2)
+        if algorithm != "scrypt":
+            return False
+        expected = hashlib.scrypt(password.encode("utf-8"), salt=bytes.fromhex(salt_hex), n=16384, r=8, p=1)
+        return secrets.compare_digest(expected.hex(), digest_hex)
+    except (ValueError, TypeError):
+        return False
+
+
+def hash_session_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+async def get_current_user(
+    session_token: str | None = Cookie(default=None, alias=settings.auth_cookie_name),
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    if not session_token:
+        raise HTTPException(status_code=401, detail="Authentication required")
+    user_session = await session.scalar(
+        select(UserSession).where(
+            UserSession.token_hash == hash_session_token(session_token),
+            UserSession.expires_at > datetime.utcnow(),
+        )
+    )
+    if user_session is None:
+        raise HTTPException(status_code=401, detail="Session expired")
+    user = await session.get(User, user_session.user_id)
+    if user is None or not user.is_active:
+        raise HTTPException(status_code=401, detail="Account unavailable")
+    return user
+
+
+async def get_optional_current_user(
+    session_token: str | None = Cookie(default=None, alias=settings.auth_cookie_name),
+    session: AsyncSession = Depends(get_session),
+) -> User | None:
+    if not session_token:
+        return None
+    try:
+        return await get_current_user(session_token, session)
+    except HTTPException:
+        return None
+
+
+def require_roles(*roles: str):
+    async def dependency(user: User = Depends(get_current_user)) -> User:
+        if user.role not in roles:
+            raise HTTPException(status_code=403, detail="Insufficient permissions")
+        return user
+    return dependency
+
+
+async def create_user_session(user: User, session: AsyncSession, response: Response) -> None:
+    raw_token = secrets.token_urlsafe(48)
+    session.add(UserSession(
+        user_id=user.id,
+        token_hash=hash_session_token(raw_token),
+        expires_at=datetime.utcnow() + timedelta(days=14),
+    ))
+    await session.commit()
+    response.set_cookie(
+        settings.auth_cookie_name,
+        raw_token,
+        max_age=14 * 24 * 60 * 60,
+        httponly=True,
+        secure=bool(os.getenv("VERCEL")),
+        samesite="lax",
+        path="/",
+    )
+
+
 app = FastAPI(title="TicoListo API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[origin.strip() for origin in settings.cors_origins.split(",")],
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 
@@ -690,6 +824,8 @@ async def startup() -> None:
         await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS consent BOOLEAN DEFAULT FALSE"))
         await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()"))
         await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS chat_token VARCHAR(64)"))
+        await connection.execute(text("ALTER TABLE assistance_requests ADD COLUMN IF NOT EXISTS user_id INTEGER"))
+        await connection.execute(text("CREATE INDEX IF NOT EXISTS ix_assistance_requests_user_id ON assistance_requests (user_id)"))
         await connection.execute(text("UPDATE assistance_requests SET chat_token = md5(random()::text || clock_timestamp()::text) WHERE chat_token IS NULL"))
         await connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_assistance_requests_chat_token ON assistance_requests (chat_token)"))
         await connection.execute(text("ALTER TABLE request_messages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW()"))
@@ -748,6 +884,63 @@ async def portal_monitor_loop() -> None:
 @app.get("/health")
 async def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/auth/register", response_model=UserOut, status_code=201)
+async def register(payload: RegisterIn, response: Response, session: AsyncSession = Depends(get_session)) -> User:
+    email = payload.email.lower()
+    existing = await session.scalar(select(User).where(User.email == email))
+    if existing:
+        raise HTTPException(status_code=409, detail="An account with this email already exists")
+    user = User(
+        email=email,
+        full_name=payload.full_name.strip(),
+        phone=payload.phone,
+        password_hash=hash_password(payload.password),
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    await create_user_session(user, session, response)
+    return user
+
+
+@app.post("/auth/login", response_model=UserOut)
+async def login(payload: LoginIn, response: Response, session: AsyncSession = Depends(get_session)) -> User:
+    user = await session.scalar(select(User).where(User.email == payload.email.lower()))
+    if user is None or not user.is_active or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid email or password")
+    await create_user_session(user, session, response)
+    return user
+
+
+@app.get("/auth/me", response_model=UserOut)
+async def current_user(user: User = Depends(get_current_user)) -> User:
+    return user
+
+
+@app.post("/auth/logout", status_code=204)
+async def logout(
+    response: Response,
+    session_token: str | None = Cookie(default=None, alias=settings.auth_cookie_name),
+    session: AsyncSession = Depends(get_session),
+) -> Response:
+    if session_token:
+        user_session = await session.scalar(select(UserSession).where(UserSession.token_hash == hash_session_token(session_token)))
+        if user_session:
+            await session.delete(user_session)
+            await session.commit()
+    response.delete_cookie(settings.auth_cookie_name, path="/")
+    return response
+
+
+@app.get("/me/assistance-requests", response_model=list[AssistanceRequestOut])
+async def my_assistance_requests(
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> list[AssistanceRequest]:
+    query = select(AssistanceRequest).where(AssistanceRequest.user_id == user.id).order_by(AssistanceRequest.id.desc())
+    return list((await session.scalars(query)).all())
 
 
 def check_portal(url: str) -> tuple[str, int | None, str | None]:
@@ -817,10 +1010,12 @@ async def get_guide(slug: str, session: AsyncSession = Depends(get_session)) -> 
 @app.post("/assistance-requests", response_model=AssistanceRequestOut, status_code=201)
 async def create_request(
     payload: AssistanceRequestIn,
+    user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
 ) -> AssistanceRequest:
     values = payload.model_dump()
     values["tags"] = ",".join(values["tags"])
+    values["user_id"] = user.id
     request = AssistanceRequest(**values)
     session.add(request)
     await session.commit()
@@ -861,6 +1056,26 @@ async def public_chat_message(
     await session.commit()
     await session.refresh(message)
     return message
+
+
+@app.get("/admin/users", response_model=list[UserOut], dependencies=[Depends(require_admin)])
+async def admin_list_users(session: AsyncSession = Depends(get_session)) -> list[User]:
+    return list((await session.scalars(select(User).order_by(User.created_at.desc()))).all())
+
+
+@app.patch("/admin/users/{user_id}/role", response_model=UserOut, dependencies=[Depends(require_admin)])
+async def admin_update_user_role(
+    user_id: int,
+    payload: RoleUpdateIn,
+    session: AsyncSession = Depends(get_session),
+) -> User:
+    user = await session.get(User, user_id)
+    if user is None:
+        raise HTTPException(status_code=404, detail="User not found")
+    user.role = payload.role
+    await session.commit()
+    await session.refresh(user)
+    return user
 
 
 @app.get("/admin/assistance-requests", response_model=list[AssistanceRequestOut], dependencies=[Depends(require_admin)])

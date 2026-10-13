@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createAssistanceRequest, getChatMessages, getServices, sendChatMessage } from "./lib/api";
+import { createAssistanceRequest, getChatMessages, getCurrentUser, getServices, sendChatMessage } from "./lib/api";
 
 const fallbackServices = [
   { icon: "🚕", category: "transport", title: "Airport transfer", es: "Transporte desde el aeropuerto", text: "Safe, private transportation from Juan Santamaría airport.", provider: "TicoListo concierge" },
@@ -332,6 +332,7 @@ export default function Home() {
   const [chatMessages, setChatMessages] = useState([]);
   const [chatDraft, setChatDraft] = useState("");
   const [chatSending, setChatSending] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
   const [catalogError, setCatalogError] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const stageRef = useRef(null);
@@ -342,6 +343,10 @@ export default function Home() {
   useEffect(() => {
     document.body.classList.toggle("dark-mode", darkMode);
   }, [darkMode]);
+
+  useEffect(() => {
+    getCurrentUser().then(setCurrentUser).catch(() => setCurrentUser(null));
+  }, []);
 
   useEffect(() => {
     const canvas = stageRef.current;
@@ -554,6 +559,7 @@ export default function Home() {
         <nav className="nav-links" aria-label="Main navigation">
           <a href="#services">{es ? "Explorar trámites" : "Explore services"}</a>
           <a href="#assistance">{es ? "Necesito ayuda" : "I need help"}</a>
+          <a href="/cuenta">{es ? "Mi cuenta" : "My account"}</a>
         </nav>
         <div className="topbar-actions">
           <button className="dark-mode-switch" type="button" onClick={startThemeAnimation} aria-label={darkMode ? "Cambiar a paisaje de día" : "Cambiar a paisaje nocturno"} aria-pressed={darkMode}>
@@ -687,6 +693,12 @@ export default function Home() {
                 <form onSubmit={handleChatSubmit} className="chat-form"><input value={chatDraft} onChange={(event) => setChatDraft(event.target.value)} placeholder={es ? "Escribe tu mensaje..." : "Write your message..."} aria-label={es ? "Mensaje para el gestor" : "Message for your case manager"} /><button className="primary" disabled={chatSending || !chatDraft.trim()}>{chatSending ? (es ? "Enviando..." : "Sending...") : (es ? "Enviar →" : "Send →")}</button></form>
               </div>
             )}
+          </div>
+        ) : !currentUser ? (
+          <div className="account-required">
+            <p className="step-label">{es ? "Crea una cuenta para continuar" : "Create an account to continue"}</p>
+            <p>{es ? "Necesitas una cuenta para enviar solicitudes y consultar su avance de forma segura." : "You need an account to submit requests and securely track your progress."}</p>
+            <a className="primary account-required-link" href="/cuenta">{es ? "Crear cuenta o iniciar sesión" : "Create an account or sign in"} →</a>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="assistance-form">

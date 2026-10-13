@@ -18,7 +18,7 @@ docker compose up --build
 
 Open `http://localhost:3000` for the web app and `http://localhost:8000/docs` for the API.
 
-The public form uses `POST /assistance-requests`. Public guides expose the institution, exact official portal, requirements, steps and a delegation CTA. The administrative API is protected with the `X-Admin-Key` header; configure `ADMIN_API_KEY` in the environment before deployment. The local development value is `dev-admin-key`, and `/admin` provides the initial request queue.
+The account area is available at `/cuenta`. Users register or sign in with an HttpOnly session cookie before submitting `POST /assistance-requests`; authenticated requests are linked to the account and can be read through `GET /me/assistance-requests`. Roles are `user`, `manager` and `admin`; the protected admin API can list users and change roles. Public guides expose the institution, exact official portal, requirements, steps and a delegation CTA. The administrative API is protected with the `X-Admin-Key` header; configure `ADMIN_API_KEY` in the environment before deployment. The local development value is `dev-admin-key`, and `/admin` provides the initial request queue.
 
 Available guide endpoints include `GET /guides` and `GET /guides/{slug}`. SEO services expose `GET /services/{language}/{slug}` and can be created or edited from the browser through `GET/POST/PUT/PATCH/DELETE /admin/services` (protected by `X-Admin-Key`). Configure `NEXT_PUBLIC_SITE_URL` with the public domain so canonical URLs, Open Graph, hreflang and the sitemap do not use localhost. The old `/guias/[slug]` route redirects to the corresponding Spanish service URL when a matching service exists.
 
