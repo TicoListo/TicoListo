@@ -25,6 +25,17 @@ const categoryIcons = {
   travel: "⌁", property: "⌂", business: "▦", family: "♧",
 };
 
+const categoryBackgrounds = {
+  transport: "https://images.unsplash.com/photo-1436491865332-7a61a109cc05?auto=format&fit=crop&w=900&q=80",
+  vehicles: "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=900&q=80",
+  paperwork: "https://images.unsplash.com/photo-1450101499163-c8848c66ca85?auto=format&fit=crop&w=900&q=80",
+  identity: "https://images.unsplash.com/photo-1563013544-824ae1b704d3?auto=format&fit=crop&w=900&q=80",
+  travel: "https://images.unsplash.com/photo-1488646953014-85cb44e25828?auto=format&fit=crop&w=900&q=80",
+  property: "https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=900&q=80",
+  business: "https://images.unsplash.com/photo-1497366754035-f200968a6e72?auto=format&fit=crop&w=900&q=80",
+  family: "https://images.unsplash.com/photo-1511895426328-dc8714191300?auto=format&fit=crop&w=900&q=80",
+};
+
 const categoryLabels = {
   all: ["Todos los trámites", "All services"], transport: ["Transporte", "Transport"],
   vehicles: ["Vehículos", "Vehicles"], paperwork: ["Documentos", "Paperwork"],
@@ -353,10 +364,16 @@ export default function Home() {
   const [catalogError, setCatalogError] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const [categoryTheme, setCategoryTheme] = useState(defaultCategoryTheme);
+  const [categoryFilterKey, setCategoryFilterKey] = useState("all");
   const stageRef = useRef(null);
   const animationRef = useRef({ state: "IDLE", theme: false });
   const es = language === "es";
   const selectedInstructions = selected ? getInstructions(selected) : null;
+
+  function selectCategory(nextCategory) {
+    setCategoryFilterKey(nextCategory);
+    setCategory(nextCategory);
+  }
 
   useEffect(() => {
     getCategoryTheme().then(setCategoryTheme).catch(() => {});
@@ -380,6 +397,13 @@ export default function Home() {
     setAccountMode(mode);
     setAccountError("");
     setAccountOpen(true);
+  }
+
+  function startDekraAssistance() {
+    setAssistanceCategory("dekra");
+    setContactNote(es ? "Necesito que un asistente de TicoListo lleve mi carro a DEKRA. Quiero coordinar la recogida, inspección y devolución del vehículo." : "I need a TicoListo assistant to take my car to DEKRA. I would like to coordinate pickup, inspection, and vehicle return.");
+    document.getElementById("assistance").scrollIntoView({ behavior: "smooth" });
+    if (!currentUser) openAccount("register");
   }
 
   async function submitAccount(event) {
@@ -694,15 +718,34 @@ export default function Home() {
 
       <section className="category-showcase" aria-labelledby="category-title">
         <div className="section-heading"><div><p className="eyebrow">{es ? "EXPLORA POR CATEGORÍA" : "BROWSE BY CATEGORY"}</p><h2 id="category-title">{es ? "Encuentra tu punto de partida" : "Find your starting point"}</h2></div><span>{es ? "Guías claras, paso a paso" : "Clear, step-by-step guides"}</span></div>
+        <button className="dekra-start-card" type="button" onClick={startDekraAssistance}>
+          <span className="dekra-start-icon" aria-hidden="true">🚗</span>
+          <span><strong>{es ? "¿Necesitas llevar tu carro a DEKRA?" : "Need to take your car to DEKRA?"}</strong><small>{es ? "Un asistente de TicoListo lo lleva por ti y coordina la devolución." : "A TicoListo assistant takes it for you and coordinates its return."}</small></span>
+          <span className="dekra-start-action">{es ? "Solicitar asistencia" : "Request assistance"} →</span>
+        </button>
         <div className="category-grid">
           {Object.entries(categoryLabels).filter(([key]) => key !== "all").slice(0, 8).map(([key, labels]) => (
-            <button className={`category-card category-${key}`} key={key} onClick={() => { setCategory(key); document.getElementById("services").scrollIntoView({ behavior: "smooth" }); }}>
+            <button className={`category-card category-${key}`} key={key} style={{ "--category-image": `url("${categoryBackgrounds[key]}")` }} onClick={() => { selectCategory(key); document.getElementById("services").scrollIntoView({ behavior: "smooth" }); }}>
               <span className="category-card-topline">
                 <span className="category-card-icon" aria-hidden="true">{categoryIcons[key]}</span>
                 <span className="category-card-count">{catalog.filter((item) => item.category === key).length}</span>
               </span>
               <span className="category-card-copy"><strong>{labels[es ? 0 : 1]}</strong><small>{es ? "Explorar servicios" : "Explore services"}</small></span>
               {categoryTheme.show_arrow && <span className="category-card-action">{es ? "Ver categoría" : "View category"} <span aria-hidden="true">↗</span></span>}
+            </button>
+          ))}
+        </div>
+        <div className="category-chip-nav" role="tablist" aria-label={es ? "Filtrar por categoría" : "Filter by category"}>
+          {Object.entries(categoryLabels).map(([key, labels]) => (
+            <button
+              className={category === key ? "category-chip active" : "category-chip"}
+              key={key}
+              type="button"
+              role="tab"
+              aria-selected={category === key}
+              onClick={() => selectCategory(key)}
+            >
+              <span>{key === "all" ? "✦" : categoryIcons[key]}</span>{labels[es ? 0 : 1]}
             </button>
           ))}
         </div>
@@ -721,7 +764,7 @@ export default function Home() {
         <aside className="filters">
           <div className="filter-heading"><strong>{es ? "Categorías" : "Categories"}</strong><span>{filtered.length}</span></div>
           {Object.entries(categoryLabels).map(([key, labels]) => (
-            <button className={category === key ? "filter active" : "filter"} key={key} onClick={() => setCategory(key)}>
+            <button className={category === key ? "filter active" : "filter"} key={key} onClick={() => selectCategory(key)}>
               <span>{labels[es ? 0 : 1]}</span><span className="filter-arrow">›</span>
             </button>
           ))}
@@ -733,7 +776,7 @@ export default function Home() {
             <span className="results-count">{filtered.length} {es ? "resultados" : "results"}</span>
           </div>
           {catalogError && <div className="catalog-status" role="status"><span aria-hidden="true">!</span><p>{catalogError}</p><button type="button" onClick={() => window.location.reload()}>{es ? "Actualizar" : "Refresh"}</button></div>}
-          <div className="service-list">
+          <div className={`service-list ${categoryFilterKey === category ? "is-filtered" : ""}`} key={categoryFilterKey}>
             {filtered.map((service) => (
               <button className="service-row" key={service.slug || service.category} onClick={() => setSelected(service)}>
                 <span className="row-icon">{service.icon}</span>

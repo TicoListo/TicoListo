@@ -1,6 +1,8 @@
 const API_URL =
   process.env.NEXT_PUBLIC_API_URL ||
-  (process.env.NODE_ENV === "production" ? "/api" : "http://localhost:8000");
+  (typeof window !== "undefined" && ["localhost", "127.0.0.1"].includes(window.location.hostname)
+    ? "http://localhost:8000"
+    : process.env.NODE_ENV === "production" ? "/api" : "http://localhost:8000");
 
 async function request(path, options = {}) {
   const response = await fetch(`${API_URL}${path}`, {
