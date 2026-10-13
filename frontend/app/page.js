@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createAssistanceRequest, getChatMessages, getCurrentUser, getServices, sendChatMessage } from "./lib/api";
+import { createAssistanceRequest, getChatMessages, getCurrentUser, getMyAssistanceRequests, getServices, loginAccount, logoutAccount, registerAccount, sendChatMessage } from "./lib/api";
 
 const fallbackServices = [
   { icon: "🚕", category: "transport", title: "Airport transfer", es: "Transporte desde el aeropuerto", text: "Safe, private transportation from Juan Santamaría airport.", provider: "TicoListo concierge" },
@@ -333,6 +333,12 @@ export default function Home() {
   const [chatDraft, setChatDraft] = useState("");
   const [chatSending, setChatSending] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [accountMode, setAccountMode] = useState("login");
+  const [accountForm, setAccountForm] = useState({ full_name: "", email: "", password: "", phone: "" });
+  const [accountRequests, setAccountRequests] = useState([]);
+  const [accountError, setAccountError] = useState("");
+  const [accountLoading, setAccountLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
   const [darkMode, setDarkMode] = useState(false);
   const stageRef = useRef(null);
@@ -345,8 +351,45 @@ export default function Home() {
   }, [darkMode]);
 
   useEffect(() => {
-    getCurrentUser().then(setCurrentUser).catch(() => setCurrentUser(null));
+    getCurrentUser().then((user) => {
+      setCurrentUser(user);
+      return getMyAssistanceRequests();
+    }).then(setAccountRequests).catch(() => {
+      setCurrentUser(null);
+      setAccountRequests([]);
+    });
   }, []);
+
+  function openAccount(mode = currentUser ? "dashboard" : "login") {
+    setAccountMode(mode);
+    setAccountError("");
+    setAccountOpen(true);
+  }
+
+  async function submitAccount(event) {
+    event.preventDefault();
+    setAccountError("");
+    setAccountLoading(true);
+    try {
+      const user = accountMode === "login"
+        ? await loginAccount({ email: accountForm.email, password: accountForm.password })
+        : await registerAccount(accountForm);
+      setCurrentUser(user);
+      setAccountRequests(await getMyAssistanceRequests());
+      setAccountMode("dashboard");
+    } catch (accountRequestError) {
+      setAccountError(accountRequestError.message);
+    } finally {
+      setAccountLoading(false);
+    }
+  }
+
+  async function signOut() {
+    await logoutAccount();
+    setCurrentUser(null);
+    setAccountRequests([]);
+    setAccountOpen(false);
+  }
 
   useEffect(() => {
     const canvas = stageRef.current;
@@ -559,7 +602,7 @@ export default function Home() {
         <nav className="nav-links" aria-label="Main navigation">
           <a href="#services">{es ? "Explorar trámites" : "Explore services"}</a>
           <a href="#assistance">{es ? "Necesito ayuda" : "I need help"}</a>
-          <a href="/cuenta">{es ? "Mi cuenta" : "My account"}</a>
+          <button className="nav-account-link" type="button" onClick={() => openAccount()}>{currentUser ? (es ? "Mi panel" : "My workspace") : (es ? "Mi cuenta" : "My account")}</button>
         </nav>
         <div className="topbar-actions">
           <button className="dark-mode-switch" type="button" onClick={startThemeAnimation} aria-label={darkMode ? "Cambiar a paisaje de día" : "Cambiar a paisaje nocturno"} aria-pressed={darkMode}>
@@ -698,7 +741,7 @@ export default function Home() {
           <div className="account-required">
             <p className="step-label">{es ? "Crea una cuenta para continuar" : "Create an account to continue"}</p>
             <p>{es ? "Necesitas una cuenta para enviar solicitudes y consultar su avance de forma segura." : "You need an account to submit requests and securely track your progress."}</p>
-            <a className="primary account-required-link" href="/cuenta">{es ? "Crear cuenta o iniciar sesión" : "Create an account or sign in"} →</a>
+            <button className="primary account-required-link" type="button" onClick={() => openAccount("register")}>{es ? "Crear cuenta o iniciar sesión" : "Create an account or sign in"} →</button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="assistance-form">
@@ -723,6 +766,35 @@ export default function Home() {
           <button type="submit" aria-label={es ? "Enviar mensaje" : "Send message"}>→</button>
         </form>
       </section>}
+      {accountOpen && <div className="modal-backdrop" onClick={() => setAccountOpen(false)}>
+        <section className="modal account-modal" onClick={(event) => event.stopPropagation()} aria-labelledby="account-title">
+          <button className="close" type="button" onClick={() => setAccountOpen(false)} aria-label={es ? "Cerrar cuenta" : "Close account"}>×</button>
+          <p className="eyebrow">TICOLISTO</p>
+          {accountMode === "dashboard" ? (
+            <>
+              <h2 id="account-title">{es ? "Tu espacio de trámites" : "Your service workspace"}</h2>
+              <p>{es ? `Hola, ${currentUser?.full_name}. Aquí puedes revisar tus solicitudes y su seguimiento.` : `Hi, ${currentUser?.full_name}. Review your requests and follow-up here.`}</p>
+              <div className="account-request-list">
+                {accountRequests.length ? accountRequests.map((item) => <article key={item.id}><strong>#{item.id} · {item.category}</strong><span>{item.status}</span><p>{item.description}</p></article>) : <p>{es ? "Aún no tienes solicitudes. Cierra este panel y completa el formulario." : "You have no requests yet. Close this panel and complete the form."}</p>}
+              </div>
+              <div className="account-modal-actions"><button className="primary" type="button" onClick={() => { setAccountOpen(false); document.getElementById("assistance").scrollIntoView({ behavior: "smooth" }); }}>{es ? "Crear solicitud" : "Create request"} →</button><button className="secondary" type="button" onClick={signOut}>{es ? "Cerrar sesión" : "Sign out"}</button></div>
+            </>
+          ) : (
+            <>
+              <h2 id="account-title">{accountMode === "login" ? (es ? "Bienvenido de nuevo" : "Welcome back") : (es ? "Crea tu cuenta" : "Create your account")}</h2>
+              <p>{es ? "Una cuenta te permite enviar solicitudes y seguir cada avance." : "An account lets you submit requests and track every update."}</p>
+              <div className="account-tabs"><button className={accountMode === "login" ? "active" : ""} type="button" onClick={() => setAccountMode("login")}>{es ? "Iniciar sesión" : "Sign in"}</button><button className={accountMode === "register" ? "active" : ""} type="button" onClick={() => setAccountMode("register")}>{es ? "Crear cuenta" : "Create account"}</button></div>
+              <form onSubmit={submitAccount} className="account-form">
+                {accountMode === "register" && <><label>{es ? "Nombre completo" : "Full name"}<input required minLength="2" value={accountForm.full_name} onChange={(event) => setAccountForm({ ...accountForm, full_name: event.target.value })} /></label><label>{es ? "Teléfono (opcional)" : "Phone (optional)"}<input value={accountForm.phone} onChange={(event) => setAccountForm({ ...accountForm, phone: event.target.value })} /></label></>}
+                <label>{es ? "Correo electrónico" : "Email"}<input required type="email" value={accountForm.email} onChange={(event) => setAccountForm({ ...accountForm, email: event.target.value })} /></label>
+                <label>{es ? "Contraseña" : "Password"}<input required minLength={accountMode === "register" ? 10 : 1} type="password" value={accountForm.password} onChange={(event) => setAccountForm({ ...accountForm, password: event.target.value })} /></label>
+                <button className="primary" disabled={accountLoading} type="submit">{accountLoading ? (es ? "Procesando..." : "Processing...") : accountMode === "login" ? (es ? "Entrar" : "Sign in") : (es ? "Crear cuenta" : "Create account")} →</button>
+              </form>
+              {accountError && <p role="alert" className="form-error">{accountError}</p>}
+            </>
+          )}
+        </section>
+      </div>}
       {selected && <div className="modal-backdrop" onClick={() => setSelected(null)}><div className="modal service-modal" onClick={(event) => event.stopPropagation()}><button className="close" onClick={() => setSelected(null)}>×</button><span className="service-icon">{selected.icon}</span><h2>{es ? selected.es : selected.title}</h2><p>{selected.text}</p><p className="service-location">{es ? "Institución responsable:" : "Responsible institution:"} {selectedInstructions.institution}</p><p><a className="service-language-link" href={`${es ? "/es/servicios/" + (selected.slug_es || selected.slug) : "/en/services/" + (selected.slug_en || selected.slug)}`}>{es ? "Abrir página completa de este servicio →" : "Open full service page →"}</a></p>{selectedInstructions.hasWebsite && <section className="modal-guide self-service"><h3>✓ {es ? "OPCIÓN 1: HACERLO TÚ MISMO" : "OPTION 1: DO IT YOURSELF"}</h3><p><strong>{es ? "Requisitos y documentos:" : "Requirements and documents:"}</strong> {selectedInstructions.requirements[es ? "es" : "en"]}</p><ol>{selectedInstructions.steps.map((step) => <li key={step.es}>{step[es ? "es" : "en"]}</li>)}</ol><div className="official-links">{selectedInstructions.sources.map(([sourceName, sourceUrl]) => <a className="official-link" href={sourceUrl} target="_blank" rel="noopener noreferrer" key={sourceUrl}><span>↗</span><strong>{es ? "Ir al sitio oficial" : "Open official website"}</strong><small>{sourceName} ↗</small></a>)}</div></section>}<section className="modal-guide delegate-service"><h3>★ {es ? "OPCIÓN 2: CONTACTA CON TICOListo" : "OPTION 2: CONTACT TicoListo"}</h3><p>{es ? "Si prefieres acompañamiento, nuestro equipo puede orientarte, encargarse del proceso y darle seguimiento." : "Our team can guide you, handle the process, and follow up for you."}</p><button className="delegate-button" onClick={() => { setContactNote(es ? `Necesito ayuda con el trámite: ${selected.es || selected.title}. Quiero conocer los requisitos y el costo de la asistencia.` : `I need help with this service: ${selected.title || selected.es}. I would like to know the requirements and assistance cost.`); setSelected(null); document.getElementById("assistance").scrollIntoView({ behavior: "smooth" }); }}><span>→</span><strong>{es ? "Contactarnos" : "Contact us"}</strong><small>{es ? "Recibe acompañamiento personalizado →" : "Get personalized assistance →"}</small></button></section></div></div>}
     </main>
   );
