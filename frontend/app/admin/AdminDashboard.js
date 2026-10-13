@@ -20,6 +20,10 @@ const emptyService = {
   content_es: "", requirements_en: "", requirements_es: "", steps_en: "",
   steps_es: "", faq_en: "[]", faq_es: "[]", official_url: "", image_url: "", published: true,
 };
+const defaultCategoryTheme = {
+  variant: "glass", accent: "#8b5cf6", accent_soft: "#ede9fe",
+  surface: "#ffffff", radius: 22, show_arrow: true,
+};
 
 export default function AdminPage() {
   const pathname = usePathname();
@@ -43,6 +47,8 @@ export default function AdminPage() {
   const [showKey, setShowKey] = useState(false);
   const [loginLoading, setLoginLoading] = useState(false);
   const [adminDarkMode, setAdminDarkMode] = useState(false);
+  const [categoryTheme, setCategoryTheme] = useState(defaultCategoryTheme);
+  const [themeNotice, setThemeNotice] = useState("");
   const selected = requests.find((item) => item.id === selectedId) || null;
   const section = pathname === "/admin/seo" ? "seo" : pathname === "/admin/calendario" ? "calendario" : pathname === "/admin/clientes" ? "clientes" : "login";
 
@@ -98,6 +104,14 @@ export default function AdminPage() {
     }
   }
 
+  async function loadCategoryTheme() {
+    try {
+      setCategoryTheme(await adminFetch("/admin/site-config/category-theme"));
+    } catch (requestError) {
+      setError(requestError.message);
+    }
+  }
+
   async function loadMessages(requestId) {
     setMessagesLoading(true);
     try {
@@ -136,7 +150,10 @@ export default function AdminPage() {
   }, [key, section, sessionReady, router]);
 
   useEffect(() => {
-    if (key && sessionReady && section === "seo") loadServices();
+    if (key && sessionReady && section === "seo") {
+      loadServices();
+      loadCategoryTheme();
+    }
   }, [key, section, sessionReady]);
 
   useEffect(() => {
@@ -262,6 +279,22 @@ export default function AdminPage() {
     } catch (requestError) {
       setError(requestError.message === "Unexpected token" ? "El FAQ debe ser un JSON válido." : requestError.message);
     }
+
+  }
+
+  async function saveCategoryTheme(event) {
+    event.preventDefault();
+    setThemeNotice("");
+    try {
+      const saved = await adminFetch("/admin/site-config/category-theme", {
+        method: "PUT",
+        body: JSON.stringify(categoryTheme),
+      });
+      setCategoryTheme(saved);
+      setThemeNotice("Tema guardado. Se aplicará en la portada y los filtros.");
+    } catch (requestError) {
+      setError(requestError.message);
+    }
   }
 
   async function deleteService(service) {
@@ -363,6 +396,25 @@ export default function AdminPage() {
         <div className="seo-service-list">
           {services.map((service) => <div className="seo-service-row" key={service.id}><div><strong>{service.name_es}</strong><span>/es/servicios/{service.slug_es || service.slug}</span><small>{service.published ? "Publicado" : "Borrador"} · {service.category}</small></div><div className="seo-service-actions"><button type="button" onClick={() => editService(service)}>Editar SEO</button><button type="button" onClick={() => deleteService(service)}>Eliminar</button></div></div>)}
         </div>
+        <form className="category-theme-editor" onSubmit={saveCategoryTheme}>
+          <div className="admin-heading">
+            <div><p className="eyebrow">Sistema visual</p><h2>Tema de categorías y filtros</h2><p>Configura globalmente el estilo Glassmorphism de la portada sin editar código.</p></div>
+            <button className="primary" type="submit">Guardar tema</button>
+          </div>
+          <div className={`category-theme-preview category-theme-${categoryTheme.variant}`} style={{ "--category-accent": categoryTheme.accent, "--category-accent-soft": categoryTheme.accent_soft, "--category-surface": categoryTheme.surface, "--category-radius": `${categoryTheme.radius}px` }}>
+            <button className="category-card" type="button"><span className="category-card-icon">TR</span><strong>Transporte</strong><small>1 servicio</small>{categoryTheme.show_arrow && <span className="category-card-arrow">↗</span>}</button>
+            <div><strong>Vista previa en vivo</strong><p>La configuración se comparte entre las tarjetas y los filtros.</p></div>
+          </div>
+          <div className="category-theme-fields">
+            <label>Variante<select value={categoryTheme.variant} onChange={(event) => setCategoryTheme({ ...categoryTheme, variant: event.target.value })}><option value="glass">Glassmorphism</option><option value="solid">Sólida</option><option value="minimal">Minimalista</option></select></label>
+            <label>Color de acento<input type="color" value={categoryTheme.accent} onChange={(event) => setCategoryTheme({ ...categoryTheme, accent: event.target.value })} /></label>
+            <label>Fondo suave<input type="color" value={categoryTheme.accent_soft} onChange={(event) => setCategoryTheme({ ...categoryTheme, accent_soft: event.target.value })} /></label>
+            <label>Superficie<input type="color" value={categoryTheme.surface} onChange={(event) => setCategoryTheme({ ...categoryTheme, surface: event.target.value })} /></label>
+            <label>Radio: {categoryTheme.radius}px<input type="range" min="10" max="36" value={categoryTheme.radius} onChange={(event) => setCategoryTheme({ ...categoryTheme, radius: Number(event.target.value) })} /></label>
+            <label className="seo-publish"><input type="checkbox" checked={categoryTheme.show_arrow} onChange={(event) => setCategoryTheme({ ...categoryTheme, show_arrow: event.target.checked })} /> Mostrar flecha de acción</label>
+          </div>
+          {themeNotice && <p className="form-success">{themeNotice}</p>}
+        </form>
         <form className="seo-editor-form" onSubmit={saveService}>
           <h3>{serviceEditingId ? "Editar servicio" : "Agregar servicio"}</h3>
           <div className="seo-form-grid">

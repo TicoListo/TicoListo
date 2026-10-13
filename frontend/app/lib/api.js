@@ -44,6 +44,10 @@ export function getServices() {
   return request("/services");
 }
 
+export function getCategoryTheme() {
+  return request("/site-config/category-theme");
+}
+
 export function createAssistanceRequest(payload) {
   return request("/assistance-requests", {
     method: "POST",

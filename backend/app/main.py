@@ -77,6 +77,12 @@ class Service(Base):
     published: Mapped[bool] = mapped_column(Boolean, default=True, server_default="true")
 
 
+class SiteConfig(Base):
+    __tablename__ = "site_configs"
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)
+
+
 class RequestStatus(str, Enum):
     new = "new"
     contacted = "contacted"
@@ -549,6 +555,29 @@ class ServiceUpdate(BaseModel):
     published: bool | None = None
 
 
+DEFAULT_CATEGORY_THEME = {
+    "variant": "glass",
+    "accent": "#8b5cf6",
+    "accent_soft": "#ede9fe",
+    "surface": "#ffffff",
+    "radius": 22,
+    "show_arrow": True,
+}
+
+
+class CategoryThemeIn(BaseModel):
+    variant: str = Field(default="glass", pattern="^(glass|solid|minimal)$")
+    accent: str = Field(default="#8b5cf6", pattern="^#[0-9a-fA-F]{6}$")
+    accent_soft: str = Field(default="#ede9fe", pattern="^#[0-9a-fA-F]{6}$")
+    surface: str = Field(default="#ffffff", pattern="^#[0-9a-fA-F]{6}$")
+    radius: int = Field(default=22, ge=10, le=36)
+    show_arrow: bool = True
+
+
+class CategoryThemeOut(CategoryThemeIn):
+    pass
+
+
 def require_admin(x_admin_key: str = Header(default="")) -> None:
     if x_admin_key != settings.admin_api_key:
         raise HTTPException(status_code=401, detail="Invalid admin credentials")
@@ -803,6 +832,10 @@ async def startup() -> None:
     global portal_monitor_task
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.create_all)
+        await connection.execute(
+            text("INSERT INTO site_configs (key, value) VALUES (:key, :value) ON CONFLICT (key) DO NOTHING"),
+            {"key": "category-theme", "value": json.dumps(DEFAULT_CATEGORY_THEME)},
+        )
         await connection.execute(text("ALTER TABLE services ADD COLUMN IF NOT EXISTS provider VARCHAR(180)"))
         for column, definition in (
             ("slug_en", "VARCHAR(120)"), ("slug_es", "VARCHAR(120)"),
@@ -995,6 +1028,18 @@ async def list_services(
     return list((await session.scalars(query)).all())
 
 
+@app.get("/site-config/category-theme", response_model=CategoryThemeOut)
+async def get_category_theme(session: AsyncSession = Depends(get_session)) -> CategoryThemeOut:
+    config = await session.get(SiteConfig, "category-theme")
+    if config is None:
+        return CategoryThemeOut(**DEFAULT_CATEGORY_THEME)
+    try:
+        return CategoryThemeOut(**json.loads(config.value))
+    except (TypeError, json.JSONDecodeError, ValueError):
+        logger.warning("Invalid category theme configuration; using defaults")
+        return CategoryThemeOut(**DEFAULT_CATEGORY_THEME)
+
+
 def service_values(payload: ServiceIn | ServiceUpdate) -> dict:
     values = payload.model_dump(exclude_unset=isinstance(payload, ServiceUpdate))
     for field in ("keywords_en", "keywords_es", "faq_en", "faq_es"):
@@ -1161,6 +1206,25 @@ async def admin_update_request(
 @app.get("/admin/guides", response_model=list[GuideOut], dependencies=[Depends(require_admin)])
 async def admin_list_guides(session: AsyncSession = Depends(get_session)) -> list[Guide]:
     return list((await session.scalars(select(Guide).order_by(Guide.id.desc()))).all())
+
+
+@app.get("/admin/site-config/category-theme", response_model=CategoryThemeOut, dependencies=[Depends(require_admin)])
+async def admin_get_category_theme(session: AsyncSession = Depends(get_session)) -> CategoryThemeOut:
+    return await get_category_theme(session)
+
+
+@app.put("/admin/site-config/category-theme", response_model=CategoryThemeOut, dependencies=[Depends(require_admin)])
+async def admin_update_category_theme(
+    payload: CategoryThemeIn,
+    session: AsyncSession = Depends(get_session),
+) -> CategoryThemeOut:
+    config = await session.get(SiteConfig, "category-theme")
+    if config is None:
+        config = SiteConfig(key="category-theme", value="")
+    config.value = json.dumps(payload.model_dump(), ensure_ascii=False)
+    session.add(config)
+    await session.commit()
+    return CategoryThemeOut(**payload.model_dump())
 
 
 @app.get("/admin/services", response_model=list[ServiceOut], dependencies=[Depends(require_admin)])

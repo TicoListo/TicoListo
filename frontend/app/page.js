@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createAssistanceRequest, getChatMessages, getCurrentUser, getMyAssistanceRequests, getServices, loginAccount, logoutAccount, registerAccount, sendChatMessage } from "./lib/api";
+import { createAssistanceRequest, getCategoryTheme, getChatMessages, getCurrentUser, getMyAssistanceRequests, getServices, loginAccount, logoutAccount, registerAccount, sendChatMessage } from "./lib/api";
 
 const fallbackServices = [
   { icon: "🚕", category: "transport", title: "Airport transfer", es: "Transporte desde el aeropuerto", text: "Safe, private transportation from Juan Santamaría airport.", provider: "TicoListo concierge" },
@@ -20,12 +20,22 @@ const serviceIcons = {
   "legal-status-certificate": "📄", marchamo: "🚘", "business-checklist": "✅", "ccss-sick-leave": "🏥",
 };
 
+const categoryIcons = {
+  transport: "✈", vehicles: "◈", paperwork: "▤", identity: "◎",
+  travel: "⌁", property: "⌂", business: "▦", family: "♧",
+};
+
 const categoryLabels = {
   all: ["Todos los trámites", "All services"], transport: ["Transporte", "Transport"],
   vehicles: ["Vehículos", "Vehicles"], paperwork: ["Documentos", "Paperwork"],
   identity: ["Identidad", "Identity"], travel: ["Viajes", "Travel"], property: ["Propiedades", "Property"],
   business: ["Negocios", "Business"], family: ["Familia", "Family"], work: ["Trabajo", "Work"],
   health: ["Salud", "Health"], housing: ["Vivienda", "Housing"],
+};
+
+const defaultCategoryTheme = {
+  variant: "glass", accent: "#8b5cf6", accent_soft: "#ede9fe",
+  surface: "#ffffff", radius: 22, show_arrow: true,
 };
 
 const smartMatches = [
@@ -341,10 +351,15 @@ export default function Home() {
   const [accountLoading, setAccountLoading] = useState(false);
   const [catalogError, setCatalogError] = useState("");
   const [darkMode, setDarkMode] = useState(false);
+  const [categoryTheme, setCategoryTheme] = useState(defaultCategoryTheme);
   const stageRef = useRef(null);
   const animationRef = useRef({ state: "IDLE", theme: false });
   const es = language === "es";
   const selectedInstructions = selected ? getInstructions(selected) : null;
+
+  useEffect(() => {
+    getCategoryTheme().then(setCategoryTheme).catch(() => {});
+  }, []);
 
   useEffect(() => {
     document.body.classList.toggle("dark-mode", darkMode);
@@ -596,7 +611,12 @@ export default function Home() {
   }
 
   return (
-    <main>
+    <main className={`category-theme-${categoryTheme.variant}`} style={{
+      "--category-accent": categoryTheme.accent,
+      "--category-accent-soft": categoryTheme.accent_soft,
+      "--category-surface": categoryTheme.surface,
+      "--category-radius": `${categoryTheme.radius}px`,
+    }}>
       <header className="topbar">
         <a className="logo" href="#top" aria-label="TicoListo home"><img className="logo-image" src={darkMode ? "/ticolisto-logo-light.png" : "/ticolisto-logo-clean.png"} alt="TicoListo" /></a>
         <nav className="nav-links" aria-label="Main navigation">
@@ -676,8 +696,12 @@ export default function Home() {
         <div className="category-grid">
           {Object.entries(categoryLabels).filter(([key]) => key !== "all").slice(0, 8).map(([key, labels]) => (
             <button className={`category-card category-${key}`} key={key} onClick={() => { setCategory(key); document.getElementById("services").scrollIntoView({ behavior: "smooth" }); }}>
-              <span className="category-card-icon">{({ transport: "TR", vehicles: "VH", paperwork: "DOC", identity: "ID", travel: "TRIP", property: "HOME", business: "BIZ", family: "FAM" })[key]}</span>
-              <strong>{labels[es ? 0 : 1]}</strong><small>{catalog.filter((item) => item.category === key).length} {es ? "servicios" : "services"}</small><span className="category-card-arrow">↗</span>
+              <span className="category-card-topline">
+                <span className="category-card-icon" aria-hidden="true">{categoryIcons[key]}</span>
+                <span className="category-card-count">{catalog.filter((item) => item.category === key).length}</span>
+              </span>
+              <span className="category-card-copy"><strong>{labels[es ? 0 : 1]}</strong><small>{es ? "Explorar servicios" : "Explore services"}</small></span>
+              {categoryTheme.show_arrow && <span className="category-card-action">{es ? "Ver categoría" : "View category"} <span aria-hidden="true">↗</span></span>}
             </button>
           ))}
         </div>
