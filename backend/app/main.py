@@ -658,7 +658,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def normalize_vercel_path(request: Request, call_next):
-    route = request.query_params.get("...path")
+    route = request.query_params.get("...path") or request.query_params.get("path")
     if route:
         request.scope["path"] = f"/{route.lstrip('/')}"
     return await call_next(request)
