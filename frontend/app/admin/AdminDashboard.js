@@ -41,6 +41,7 @@ export default function AdminPage() {
   const [serviceEditingId, setServiceEditingId] = useState(null);
   const [serviceNotice, setServiceNotice] = useState("");
   const [showKey, setShowKey] = useState(false);
+  const [loginLoading, setLoginLoading] = useState(false);
   const [adminDarkMode, setAdminDarkMode] = useState(false);
   const selected = requests.find((item) => item.id === selectedId) || null;
   const section = pathname === "/admin/seo" ? "seo" : pathname === "/admin/calendario" ? "calendario" : pathname === "/admin/clientes" ? "clientes" : "login";
@@ -80,6 +81,11 @@ export default function AdminPage() {
       setRequests(items);
       if (!selectedId && items[0]) setSelectedId(items[0].id);
     } catch (requestError) {
+      if (requestError.message === "Invalid admin credentials") {
+        window.sessionStorage.removeItem("ticolisto-admin-key");
+        setKey("");
+        router.replace("/admin");
+      }
       setError(requestError.message);
     }
   }
@@ -149,13 +155,30 @@ export default function AdminPage() {
     }
   }, [section]);
 
-  function saveKey(event) {
+  async function saveKey(event) {
     event.preventDefault();
     const submittedKey = new FormData(event.currentTarget).get("admin-key")?.toString().trim() || "";
     if (!submittedKey) return;
-    window.sessionStorage.setItem("ticolisto-admin-key", submittedKey);
-    setKey(submittedKey);
-    router.push("/admin/clientes");
+    setLoginLoading(true);
+    setError("");
+    try {
+      const response = await fetch(`${API_URL}/admin/assistance-requests`, {
+        headers: { "X-Admin-Key": submittedKey },
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => null);
+        throw new Error(body?.detail || "No se pudo validar la clave.");
+      }
+      window.sessionStorage.setItem("ticolisto-admin-key", submittedKey);
+      setKey(submittedKey);
+      router.push("/admin/clientes");
+    } catch (loginError) {
+      window.sessionStorage.removeItem("ticolisto-admin-key");
+      setKey("");
+      setError(loginError.message);
+    } finally {
+      setLoginLoading(false);
+    }
   }
 
   function logout() {
@@ -292,7 +315,7 @@ export default function AdminPage() {
               <button type="button" className="admin-key-toggle" onClick={() => setShowKey((visible) => !visible)} aria-label={showKey ? "Ocultar clave" : "Mostrar clave"}>{showKey ? "Ocultar" : "Mostrar"}</button>
             </div>
           </label>
-          <button className="primary admin-login-submit" type="submit"><span>Entrar al panel</span><span className="admin-login-arrow" aria-hidden="true">→</span></button>
+          <button className="primary admin-login-submit" type="submit" disabled={loginLoading}><span>{loginLoading ? "Validando..." : "Entrar al panel"}</span><span className="admin-login-arrow" aria-hidden="true">→</span></button>
         </form>
         <div className="admin-login-features" aria-label="Funciones del panel"><span>✓ Clientes</span><span>✓ Seguimiento</span><span>✓ Calendario</span></div>
         <p className="admin-login-security"><span aria-hidden="true">✦</span> Espacio privado · Solo personal autorizado</p>
