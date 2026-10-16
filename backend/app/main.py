@@ -594,7 +594,16 @@ def record_action(session: AsyncSession, request_id: int, action: str, details: 
     return RequestAction(request_id=request_id, action=action, details=json.dumps(details or {}, ensure_ascii=False, default=str))
 
 
-def catalog_service(slug: str, category: str, name_en: str, name_es: str, provider: str) -> dict[str, str | None]:
+def catalog_service(
+    slug: str,
+    category: str,
+    name_en: str,
+    name_es: str,
+    provider: str,
+    official_url: str | None = None,
+    requirements_es: str | None = None,
+    steps_es: str | None = None,
+) -> dict[str, str | None]:
     return {
         "slug": slug,
         "slug_en": slug,
@@ -607,6 +616,9 @@ def catalog_service(slug: str, category: str, name_en: str, name_es: str, provid
         "location": "Costa Rica",
         "provider": provider,
         "whatsapp": None,
+        "official_url": official_url,
+        "requirements_es": requirements_es,
+        "steps_es": steps_es,
         "published": True,
     }
 
@@ -619,29 +631,37 @@ DEFAULT_SERVICES = [
     catalog_service("renew-drivers-license", "vehicles", "Renew a driver's license", "Renovar licencia de conducir", "COSEVI / Educación Vial"),
     catalog_service("first-drivers-license", "vehicles", "Get a first driver's license", "Sacar licencia por primera vez", "COSEVI / Educación Vial"),
     catalog_service("vehicle-inspection", "vehicles", "Vehicle technical inspection (DEKRA)", "Inspección técnica vehicular (DEKRA)", "DEKRA Costa Rica"),
-    catalog_service("buy-used-vehicle", "vehicles", "Buy a used vehicle", "Comprar un vehículo usado", "Registro Nacional / notario"),
+    catalog_service("buy-used-vehicle", "vehicles", "Buy a used vehicle", "Comprar un vehículo usado", "Registro Nacional / notario", "https://www.rnpdigital.com"),
     catalog_service("sell-vehicle", "vehicles", "Sell a vehicle", "Vender un vehículo", "Registro Nacional / notario"),
     catalog_service("lost-id", "identity", "I lost my ID", "Perdí mi cédula", "Tribunal Supremo de Elecciones"),
     catalog_service("passport-renewal", "travel", "Renew or get a passport", "Renovar o sacar pasaporte", "Migración y Extranjería"),
     catalog_service("minor-passport", "family", "Passport for a minor", "Pasaporte para una persona menor", "Migración y Extranjería"),
-    catalog_service("registry-certificate", "paperwork", "Get a registry certificate", "Obtener una certificación registral", "Registro Nacional"),
-    catalog_service("buy-property", "property", "Buy a property", "Comprar una propiedad", "Registro Nacional / municipalidad / notario"),
-    catalog_service("sell-property", "property", "Sell a property", "Vender una propiedad", "Registro Nacional / notario"),
+    catalog_service("buy-property", "property", "Buy a property", "Comprar una propiedad", "Registro Nacional / municipalidad / notario", "https://www.rnpdigital.com"),
+    catalog_service("sell-property", "property", "Sell a property", "Vender una propiedad", "Registro Nacional / notario", "https://www.rnpdigital.com"),
     catalog_service("short-stay-rental", "property", "Operate a short-stay rental", "Quiero operar un alquiler de corta estancia", "Municipalidad / ICT / Hacienda según el caso"),
     catalog_service("create-company", "business", "Create a company", "Crear una sociedad", "Notario / Registro Nacional / Hacienda"),
-    catalog_service("tax-obligations", "business", "Register or review tax obligations", "Inscribirme o revisar obligaciones en Hacienda", "Ministerio de Hacienda / TRIBU-CR"),
-    catalog_service("municipal-license", "business", "Get a municipal business license", "Sacar patente municipal", "Municipalidad correspondiente"),
-    catalog_service("health-permit", "business", "Sanitary operating permit", "Permiso Sanitario de Funcionamiento", "Ministerio de Salud"),
-    catalog_service("self-employed", "business", "Start working independently", "Empezar a trabajar por cuenta propia", "Hacienda / CCSS según corresponda"),
+    catalog_service("tax-obligations", "business", "Register or review tax obligations", "Inscribirme o revisar obligaciones en Hacienda", "Ministerio de Hacienda / TRIBU-CR", "https://ovitribucr.hacienda.go.cr"),
+    catalog_service("municipal-license", "business", "Get a municipal business license", "Sacar patente municipal", "Municipalidad correspondiente", "https://vui.cr"),
+    catalog_service("health-permit", "business", "Sanitary operating permit", "Permiso Sanitario de Funcionamiento", "Ministerio de Salud", "https://vui.cr"),
+    catalog_service(
+        "self-employed",
+        "business",
+        "Start working independently",
+        "Empezar a trabajar por cuenta propia",
+        "Hacienda / CCSS según corresponda",
+        "https://ovitribucr.hacienda.go.cr",
+        "Documento de identidad vigente (cédula de identidad o DIMEX).\nDirección exacta (provincia, cantón, distrito) para el domicilio fiscal.\nCorreo electrónico y número de celular para la verificación en dos pasos y notificaciones.\nDescripción clara de la actividad económica o servicios profesionales que vas a ofrecer.",
+        "1. Inscripción en el Ministerio de Hacienda: ingresa a la Oficina Virtual de TRIBU-CR (https://ovitribucr.hacienda.go.cr).\n2. Crea tu usuario con tu documento de identidad (cédula, DIMEX o NITE).\n3. Completa el formulario del Registro Único Tributario (RUT) para registrar tu actividad económica (código CIIU), domicilio fiscal y el régimen tributario correspondiente.\n4. Contrata o configura un proveedor de facturación electrónica para emitir tus comprobantes autorizados.\n5. Afiliación en la CCSS como Trabajador Independiente: ingresa a la plataforma de autoafiliación o sucursal virtual de la CCSS (https://sde.ccss.sa.cr) o dirígete a la sucursal de la CCSS más cercana.\n6. Completa la solicitud de aseguramiento obligatorio indicando la actividad a realizar e ingresos proyectados o reales.",
+    ),
     catalog_service("dismissal-next-steps", "work", "Organize next steps after dismissal", "Me despidieron: ordenar los siguientes pasos", "MTSS / CCSS / empleador según el caso"),
     catalog_service("birth-documents", "family", "Resolve birth documentation", "Registrar o resolver documentación de nacimiento", "Registro Civil / TSE"),
     catalog_service("civil-marriage", "family", "Prepare for a civil marriage", "Prepararme para contraer matrimonio civil", "Registro Civil / notario"),
-    catalog_service("death-of-family-member", "family", "What to arrange after a family death", "Qué ordenar cuando fallece un familiar", "Registro Civil / CCSS / notario y otras entidades"),
+    catalog_service("death-of-family-member", "family", "What to arrange after a family death", "Qué ordenar cuando fallece un familiar", "Registro Civil / CCSS / notario y otras entidades", "https://www.tse.go.cr"),
     catalog_service("minor-international-travel", "travel", "Travel abroad with a minor", "Viajar fuera de Costa Rica con una persona menor", "Migración y Extranjería"),
     catalog_service("legal-status-certificate", "paperwork", "Get a legal status certificate", "Sacar una personería jurídica", "Registro Nacional"),
-    catalog_service("marchamo", "vehicles", "Review and pay the marchamo", "Revisar y pagar el marchamo", "INS / entidades recaudadoras autorizadas"),
+    catalog_service("marchamo", "vehicles", "Review and pay the marchamo", "Revisar y pagar el marchamo", "INS / entidades recaudadoras autorizadas", "https://marchamo.grupoins.com"),
     catalog_service("business-checklist", "business", "Open a business: initial checklist", "Abrir un negocio: checklist inicial", "Municipalidad / Hacienda / Salud según actividad"),
-    catalog_service("ccss-sick-leave", "health", "Organize a CCSS sick leave", "Ordenar una incapacidad de la CCSS", "Caja Costarricense de Seguro Social"),
+    catalog_service("ccss-sick-leave", "health", "Organize a CCSS sick leave", "Ordenar una incapacidad de la CCSS", "Caja Costarricense de Seguro Social", "https://www.ccss.sa.cr"),
 ]
 
 DEFAULT_GUIDES = [

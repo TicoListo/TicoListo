@@ -85,7 +85,7 @@ main:not(.admin-page) .hero-banner .eyebrow {
 
 /* Final hero refinements: preserve the headline, simplify the search control and
    keep decorative artwork out of the reading flow on small screens. */
-.hero-copy h1,.hero-copy h1 span{color:#fff}.hero-copy h1 span{position:relative}.hero-copy h1 span::after{content:"";position:absolute;left:0;right:4px;bottom:-7px;height:4px;border-radius:999px;background:#7dd3fc;opacity:.9}
+.hero-copy h1,.hero-copy h1 span{color:#fff}
 .search-panel{background:#fff;border:1px solid rgba(2,47,108,.08);border-radius:16px;padding:20px 22px 16px;box-shadow:0 10px 30px rgba(0,0,0,.1);backdrop-filter:none;-webkit-backdrop-filter:none}
 .search-panel label{color:var(--ink)}.search-row{background:#f8fbfd;border-color:#dce8ee;box-shadow:none}.search-button{font-size:13px;height:44px;min-width:86px;border-radius:10px;padding:0 16px;background:var(--blue)}.search-button::before{content:none}.search-button:hover{background:#0369a1;transform:translateY(-1px)}
 .search-hint{color:var(--muted)}.search-panel .assistant-trigger{margin-top:8px}

@@ -13,7 +13,7 @@ const fallbackServices = [
 const serviceIcons = {
   "renew-drivers-license": "🚘", "first-drivers-license": "🚘", "vehicle-inspection": "🔧",
   "buy-used-vehicle": "🚙", "sell-vehicle": "🚗", "lost-id": "🪪", "passport-renewal": "🛂",
-  "minor-passport": "🧳", "registry-certificate": "📜", "buy-property": "🏠", "sell-property": "🏡",
+  "minor-passport": "🧳", "buy-property": "🏠", "sell-property": "🏡",
   "short-stay-rental": "🛏️", "create-company": "🏢", "tax-obligations": "💰", "municipal-license": "🏛️",
   "health-permit": "🩺", "self-employed": "💼", "dismissal-next-steps": "📋", "birth-documents": "👶",
   "civil-marriage": "💍", "death-of-family-member": "🕊️", "minor-international-travel": "✈️",
