@@ -132,15 +132,15 @@ const serviceOfficialDetails = {
   "renew-drivers-license": ["COSEVI / Educación Vial", "https://www.educacionvial.go.cr"],
   "first-drivers-license": ["COSEVI / Educación Vial", "https://www.educacionvial.go.cr"],
   "vehicle-inspection": ["DEKRA Costa Rica", "https://www.dekra.cr"],
-  "buy-used-vehicle": ["Registro Nacional / notario", "https://www.rnpdigital.com"],
-  "sell-vehicle": ["Registro Nacional / notario", "https://www.rnpdigital.com"],
+  "buy-used-vehicle": ["Encuentra24 Autos", "https://encuentra24.com/costa-rica-es/autos"],
+  "sell-vehicle": ["Encuentra24 Autos", "https://encuentra24.com/costa-rica-es/autos"],
   "lost-id": ["Tribunal Supremo de Elecciones", "https://www.tse.go.cr"],
   "passport-renewal": ["Migración y Extranjería", "https://www.migracion.go.cr"],
   "minor-passport": ["Migración y Extranjería", "https://www.migracion.go.cr"],
-  "buy-property": ["Registro Nacional / municipalidad / notario", "https://www.rnpdigital.com"],
-  "sell-property": ["Registro Nacional / notario", "https://www.rnpdigital.com"],
-  "short-stay-rental": ["Municipalidad / ICT / Hacienda", "https://www.ict.go.cr"],
-  "create-company": ["Notario / Registro Nacional / Hacienda", "https://www.rnpdigital.com"],
+  "buy-property": ["Encuentra24", "https://encuentra24.com/costa-rica-es/bienes-raices"],
+  "sell-property": ["Encuentra24", "https://encuentra24.com/costa-rica-es/bienes-raices"],
+  "short-stay-rental": ["Encuentra24", "https://encuentra24.com/costa-rica-es/bienes-raices"],
+  "create-company": ["CrearEmpresa.go.cr", "https://crearempresa.go.cr"],
   "tax-obligations": ["Ministerio de Hacienda / ATV", "https://www.atv.hacienda.go.cr"],
   "municipal-license": ["Municipalidad correspondiente", "https://www.gob.cr"],
   "health-permit": ["Ministerio de Salud", "https://www.tramitessalud.go.cr"],
@@ -150,12 +150,14 @@ const serviceOfficialDetails = {
   "civil-marriage": ["Registro Civil / notario", "https://www.tse.go.cr"],
   "death-of-family-member": ["Registro Civil / CCSS / notario", "https://www.tse.go.cr"],
   "minor-international-travel": ["Migración y Extranjería", "https://www.migracion.go.cr"],
-  "legal-status-certificate": ["Registro Nacional", "https://www.rnpdigital.com"],
+  "legal-status-certificate": ["Registro Nacional", "https://www.rnpdigital.com/"],
   marchamo: ["INS / entidades recaudadoras autorizadas", "https://www.ins-cr.com"],
   "business-checklist": ["Municipalidad / Hacienda / Salud", "https://vui.cr"],
   "ccss-sick-leave": ["Caja Costarricense de Seguro Social", "https://edus.ccss.sa.cr"],
 };
 
+const propertyListingSlugs = new Set(["buy-property", "sell-property", "short-stay-rental"]);
+const vehicleListingSlugs = new Set(["buy-used-vehicle", "sell-vehicle"]);
 const popularServiceSlugs = ["renew-drivers-license", "passport-renewal", "lost-id", "marchamo"];
 
 function updatePhysics(stickman, deltaTime) {
@@ -312,7 +314,11 @@ function drawStickman(context, stickman) {
 function getInstructions(service) {
   const knownDetails = serviceOfficialDetails[service.slug] || [];
   const institution = knownDetails[0] || "Institución responsable";
-  const url = service.official_url || knownDetails[1] || null;
+  const url = propertyListingSlugs.has(service.slug)
+    ? knownDetails[1]
+    : vehicleListingSlugs.has(service.slug)
+      ? knownDetails[1]
+    : service.official_url || knownDetails[1] || null;
   const sources = url ? [[institution, url]] : [];
   return {
     institution: service.provider || institution,

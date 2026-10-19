@@ -3,6 +3,9 @@
 import { useState } from "react";
 import Link from "next/link";
 
+const propertyListingUrl = "https://encuentra24.com/costa-rica-es/bienes-raices";
+const propertyServiceSlugs = new Set(["buy-property", "sell-property", "short-stay-rental"]);
+
 function parseList(value) {
   return (value || "")
     .split(/\s*(?:\d+\.\s+|[\r\n]+|[•*-]\s+)/)
@@ -53,6 +56,7 @@ export default function ServicePage({ service, language }) {
     },
   ];
   const slug = isSpanish ? service.slug_es || service.slug : service.slug_en || service.slug;
+  const officialUrl = propertyServiceSlugs.has(service.slug) ? propertyListingUrl : service.official_url;
   const basePath = isSpanish ? `/es/servicios/${slug}` : `/en/services/${slug}`;
   const alternatePath = isSpanish
     ? `/en/services/${service.slug_en || service.slug}`
@@ -132,7 +136,7 @@ export default function ServicePage({ service, language }) {
         <section className="guide-section">
           <h2>{isSpanish ? "Cómo hacerlo por tu cuenta" : "How to do it yourself"}</h2>
           <ol className="service-steps">{stepsForSchema.map((step, index) => <li key={step}><label><input type="checkbox" checked={checkedSteps.includes(index)} onChange={() => toggleStep(index)} /> <span className={checkedSteps.includes(index) ? "is-complete" : ""}>{step}</span></label></li>)}</ol>
-          {service.official_url ? <a className="primary-button" href={service.official_url} target="_blank" rel="noreferrer">{isSpanish ? "Ir al sitio oficial ↗" : "Open official website ↗"}</a> : <p className="service-note">{isSpanish ? "Revisa la información oficial de la institución responsable." : "Check the responsible institution’s official information."}</p>}
+          {officialUrl ? <a className="primary-button" href={officialUrl} target="_blank" rel="noreferrer">{isSpanish ? "Ir al sitio oficial ↗" : "Open official website ↗"}</a> : <p className="service-note">{isSpanish ? "Revisa la información oficial de la institución responsable." : "Check the responsible institution’s official information."}</p>}
         </section>
         {faq.length > 0 && <section className="guide-section"><h2>{isSpanish ? "Preguntas frecuentes" : "Frequently asked questions"}</h2>{faq.map((item) => <details key={item.question}><summary>{item.question}</summary><p>{item.answer}</p></details>)}</section>}
         <section className="guide-cta">
