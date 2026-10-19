@@ -1136,12 +1136,10 @@ async def public_chat_messages(
     session: AsyncSession = Depends(get_session),
 ) -> list[RequestMessage]:
     response.headers["Cache-Control"] = "no-store, max-age=0"
-    query = (
-        select(RequestMessage)
-        .join(AssistanceRequest, AssistanceRequest.id == RequestMessage.request_id)
-        .where(AssistanceRequest.chat_token == chat_token, RequestMessage.id > since_id)
-        .order_by(RequestMessage.id)
-    )
+    request = await session.scalar(select(AssistanceRequest).where(AssistanceRequest.chat_token == chat_token))
+    if request is None:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    query = select(RequestMessage).where(RequestMessage.request_id == request.id, RequestMessage.id > since_id).order_by(RequestMessage.id)
     return list((await session.scalars(query)).all())
 
 
