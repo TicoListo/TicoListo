@@ -1129,6 +1129,7 @@ async def get_request(request_id: int, session: AsyncSession = Depends(get_sessi
 
 
 @app.get("/chat/{chat_token}", response_model=list[ChatMessageOut])
+@app.get("/chat-token/{chat_token}", response_model=list[ChatMessageOut])
 async def public_chat_messages(
     chat_token: str,
     response: Response,
@@ -1144,6 +1145,7 @@ async def public_chat_messages(
 
 
 @app.post("/chat/{chat_token}", response_model=ChatMessageOut, status_code=201)
+@app.post("/chat-token/{chat_token}", response_model=ChatMessageOut, status_code=201)
 async def public_chat_message(
     chat_token: str,
     payload: ChatMessageIn,
