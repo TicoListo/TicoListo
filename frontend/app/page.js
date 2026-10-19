@@ -372,6 +372,7 @@ export default function Home() {
   const [categoryTheme, setCategoryTheme] = useState(defaultCategoryTheme);
   const [categoryFilterKey, setCategoryFilterKey] = useState("all");
   const stageRef = useRef(null);
+  const chatMessagesRef = useRef([]);
   const animationRef = useRef({ state: "IDLE", theme: false });
   const es = language === "es";
   const selectedInstructions = selected ? getInstructions(selected) : null;
@@ -613,10 +614,22 @@ export default function Home() {
   }
 
   useEffect(() => {
+    chatMessagesRef.current = chatMessages;
+  }, [chatMessages]);
+
+  useEffect(() => {
     if (!chatToken) return undefined;
-    const load = () => getChatMessages(chatToken).then(setChatMessages).catch(() => {});
+    const load = () => {
+      const lastId = chatMessagesRef.current.reduce((highest, item) => Math.max(highest, Number(item.id) || 0), 0);
+      getChatMessages(chatToken, lastId).then((incoming) => {
+        if (incoming.length) setChatMessages((items) => {
+          const knownIds = new Set(items.map((item) => item.id));
+          return [...items, ...incoming.filter((item) => !knownIds.has(item.id))];
+        });
+      }).catch(() => {});
+    };
     load();
-    const timer = window.setInterval(load, 10000);
+    const timer = window.setInterval(load, 4000);
     return () => window.clearInterval(timer);
   }, [chatToken]);
 
@@ -624,11 +637,15 @@ export default function Home() {
     event.preventDefault();
     if (!chatDraft.trim() || !chatToken) return;
     setChatSending(true);
+    const draft = chatDraft.trim();
+    const optimistic = { id: `pending-${Date.now()}`, author: "Cliente", message: draft, created_at: new Date().toISOString() };
+    setChatMessages((items) => [...items, optimistic]);
+    setChatDraft("");
     try {
-      const message = await sendChatMessage(chatToken, chatDraft.trim());
-      setChatMessages((items) => [...items, message]);
-      setChatDraft("");
+      const message = await sendChatMessage(chatToken, draft);
+      setChatMessages((items) => [...items.filter((item) => item.id !== optimistic.id), message]);
     } catch (chatError) {
+      setChatMessages((items) => items.filter((item) => item.id !== optimistic.id));
       setError(chatError.message);
     } finally {
       setChatSending(false);

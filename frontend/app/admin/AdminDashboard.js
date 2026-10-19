@@ -160,7 +160,10 @@ export default function AdminPage() {
     if (selected) {
       setManager(selected.assigned_to || "");
       loadMessages(selected.id);
+      const timer = window.setInterval(() => loadMessages(selected.id), 5000);
+      return () => window.clearInterval(timer);
     }
+    return undefined;
   }, [selectedId, requests]);
 
   useEffect(() => {

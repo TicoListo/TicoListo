@@ -1129,11 +1129,13 @@ async def get_request(request_id: int, session: AsyncSession = Depends(get_sessi
 
 
 @app.get("/chat/{chat_token}", response_model=list[ChatMessageOut])
-async def public_chat_messages(chat_token: str, session: AsyncSession = Depends(get_session)) -> list[RequestMessage]:
-    request = await session.scalar(select(AssistanceRequest).where(AssistanceRequest.chat_token == chat_token))
-    if request is None:
-        raise HTTPException(status_code=404, detail="Chat not found")
-    query = select(RequestMessage).where(RequestMessage.request_id == request.id).order_by(RequestMessage.id)
+async def public_chat_messages(
+    chat_token: str,
+    since_id: int = Query(default=0, ge=0),
+    session: AsyncSession = Depends(get_session),
+) -> list[RequestMessage]:
+    request_id = select(AssistanceRequest.id).where(AssistanceRequest.chat_token == chat_token).scalar_subquery()
+    query = select(RequestMessage).where(RequestMessage.request_id == request_id, RequestMessage.id > since_id).order_by(RequestMessage.id)
     return list((await session.scalars(query)).all())
 
 
@@ -1339,7 +1341,7 @@ async def admin_create_guide(payload: GuideIn, session: AsyncSession = Depends(g
     return guide
 
 
-@app.post("/admin/assistance-requests/{request_id}/messages", status_code=201, dependencies=[Depends(require_admin)])
+@app.post("/admin/assistance-requests/{request_id}/messages", response_model=MessageOut, status_code=201, dependencies=[Depends(require_admin)])
 async def admin_add_message(
     request_id: int,
     payload: MessageIn,
@@ -1351,7 +1353,7 @@ async def admin_add_message(
     session.add(message)
     await session.commit()
     await session.refresh(message)
-    return {"id": message.id}
+    return message
 
 
 @app.get("/admin/portals", response_model=list[PortalOut], dependencies=[Depends(require_admin)])
@@ -1530,9 +1532,10 @@ async def list_notifications(session: AsyncSession = Depends(get_session)) -> li
 @app.get("/admin/assistance-requests/{request_id}/messages", response_model=list[MessageOut], dependencies=[Depends(require_admin)])
 async def admin_list_messages(
     request_id: int,
+    since_id: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> list[RequestMessage]:
     if await session.get(AssistanceRequest, request_id) is None:
         raise HTTPException(status_code=404, detail="Assistance request not found")
-    query = select(RequestMessage).where(RequestMessage.request_id == request_id).order_by(RequestMessage.id)
+    query = select(RequestMessage).where(RequestMessage.request_id == request_id, RequestMessage.id > since_id).order_by(RequestMessage.id)
     return list((await session.scalars(query)).all())

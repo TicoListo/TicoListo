@@ -57,8 +57,8 @@ export function createAssistanceRequest(payload) {
   });
 }
 
-export function getChatMessages(token) {
-  return request(`/chat/${encodeURIComponent(token)}`);
+export function getChatMessages(token, sinceId = 0) {
+  return request(`/chat/${encodeURIComponent(token)}?since_id=${sinceId}`);
 }
 
 export function sendChatMessage(token, message) {
