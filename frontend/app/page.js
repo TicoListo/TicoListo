@@ -339,6 +339,7 @@ export default function Home() {
   const [category, setCategory] = useState("all");
   const [query, setQuery] = useState("");
   const [selected, setSelected] = useState(null);
+  const [helpOptionsOpen, setHelpOptionsOpen] = useState(false);
   const [sent, setSent] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
@@ -396,6 +397,22 @@ export default function Home() {
     setAccountMode(mode);
     setAccountError("");
     setAccountOpen(true);
+  }
+
+  function openHelpOptions() {
+    setHelpOptionsOpen(true);
+  }
+
+  function chooseAssistantHelp() {
+    setHelpOptionsOpen(false);
+    openAssistant();
+    document.getElementById("services-assistant")?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
+
+  function chooseContactHelp() {
+    setHelpOptionsOpen(false);
+    document.getElementById("assistance").scrollIntoView({ behavior: "smooth" });
+    if (!currentUser) openAccount("register");
   }
 
   function startDekraAssistance() {
@@ -645,7 +662,7 @@ export default function Home() {
         <a className="logo" href="#top" aria-label="TicoListo home"><img className="logo-image" src={darkMode ? "/ticolisto-logo-light.png" : "/ticolisto-logo-clean.png"} alt="TicoListo" /></a>
         <nav className="nav-links" aria-label="Main navigation">
           <a href="#services">{es ? "Explorar trámites" : "Explore services"}</a>
-          <a href="#assistance">{es ? "Necesito ayuda" : "I need help"}</a>
+          <button className="nav-account-link" type="button" onClick={() => openHelpOptions()}>{es ? "Necesito ayuda" : "I need help"}</button>
           <button className="nav-account-link" type="button" onClick={() => openAccount()}>{currentUser ? (es ? "Mi panel" : "My workspace") : (es ? "Mi cuenta" : "My account")}</button>
         </nav>
         <div className="topbar-actions">
@@ -691,7 +708,7 @@ export default function Home() {
           <div className="search-row">
             <span className="search-icon">⌕</span>
             <input id="service-search" className="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={es ? "Busca un trámite, servicio o institución" : "Search a service or institution"} />
-            <button className="search-button" onClick={() => document.getElementById("services").scrollIntoView({ behavior: "smooth" })}>{es ? "Buscar" : "Search"}</button>
+            <button className="search-button" type="button" onClick={() => document.getElementById("services").scrollIntoView({ behavior: "smooth" })}>{es ? "Buscar" : "Search"}</button>
           </div>
           <p className="search-hint">{es ? "Ej.: licencia, pasaporte, propiedad, Hacienda..." : "Example: license, passport, property, taxes..."}</p>
           <button
@@ -769,9 +786,9 @@ export default function Home() {
 
       <section className="catalog-layout" id="services">
         <aside className="filters">
-          <div className="filter-heading"><strong>{es ? "Categorías" : "Categories"}</strong><span>{filtered.length}</span></div>
+          <div className="filter-heading"><strong>{es ? "Categorías" : "Categories"}</strong><span>{catalog.length}</span></div>
           {Object.entries(categoryLabels).map(([key, labels]) => (
-            <button className={category === key ? "filter active" : "filter"} key={key} onClick={() => selectCategory(key)}>
+            <button className={category === key ? "filter active" : "filter"} key={key} type="button" aria-pressed={category === key} onClick={() => selectCategory(key)}>
               <span>{labels[es ? 0 : 1]}</span><span className="filter-arrow">›</span>
             </button>
           ))}
@@ -829,6 +846,26 @@ export default function Home() {
       </section>
 
       <footer><span className="logo"><img className="logo-image" src={darkMode ? "/ticolisto-logo-light.png" : "/ticolisto-logo-clean.png"} alt="TicoListo" /></span><span>{es ? "Una guía más clara para Costa Rica." : "A clearer guide to Costa Rica."}</span></footer>
+      {helpOptionsOpen && <div className="modal-backdrop" onClick={() => setHelpOptionsOpen(false)}>
+        <section className="modal help-options-modal" role="dialog" aria-modal="true" aria-labelledby="help-options-title" onClick={(event) => event.stopPropagation()}>
+          <button className="close" type="button" onClick={() => setHelpOptionsOpen(false)} aria-label={es ? "Cerrar opciones de ayuda" : "Close help options"}>×</button>
+          <span className="service-icon" aria-hidden="true">✦</span>
+          <h2 id="help-options-title">{es ? "¿Cómo prefieres recibir ayuda?" : "How would you like help?"}</h2>
+          <p>{es ? "Elige la opción que mejor se adapte a lo que necesitas." : "Choose the option that best fits what you need."}</p>
+          <div className="help-options-list">
+            <button className="help-option assistant-help-option" type="button" onClick={chooseAssistantHelp}>
+              <span className="help-option-icon" aria-hidden="true">✦</span>
+              <span><strong>{es ? "Hablar con el asistente" : "Talk to the assistant"}</strong><small>{es ? "Encuentra una guía y los siguientes pasos." : "Find a guide and your next steps."}</small></span>
+              <span aria-hidden="true">›</span>
+            </button>
+            <button className="help-option contact-help-option" type="button" onClick={chooseContactHelp}>
+              <span className="help-option-icon" aria-hidden="true">💬</span>
+              <span><strong>{es ? "Contactar con TicoListo" : "Contact TicoListo"}</strong><small>{es ? "Cuéntanos qué necesitas y te contactaremos." : "Tell us what you need and we will contact you."}</small></span>
+              <span aria-hidden="true">›</span>
+            </button>
+          </div>
+        </section>
+      </div>}
       {assistantOpen && <section className="assistant-card" id="services-assistant" aria-label={es ? "Chatbot de trámites" : "Services chatbot"}>
         <button className="assistant-close" onClick={() => setAssistantOpen(false)} aria-label={es ? "Cerrar asistente" : "Close assistant"}>×</button>
         <div className="assistant-header"><span className="assistant-avatar">✦</span><div><strong>{es ? "Asistente de trámites" : "Services assistant"}</strong><small>{es ? "Orientación inteligente" : "Smart guidance"}</small></div></div>
