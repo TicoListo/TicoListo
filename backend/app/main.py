@@ -1132,8 +1132,10 @@ async def get_request(request_id: int, session: AsyncSession = Depends(get_sessi
 async def public_chat_messages(
     chat_token: str,
     since_id: int = Query(default=0, ge=0),
+    response: Response,
     session: AsyncSession = Depends(get_session),
 ) -> list[RequestMessage]:
+    response.headers["Cache-Control"] = "no-store, max-age=0"
     request_id = select(AssistanceRequest.id).where(AssistanceRequest.chat_token == chat_token).scalar_subquery()
     query = select(RequestMessage).where(RequestMessage.request_id == request_id, RequestMessage.id > since_id).order_by(RequestMessage.id)
     return list((await session.scalars(query)).all())
