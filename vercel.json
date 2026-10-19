@@ -20,6 +20,10 @@
       "destination": "/api/index.py?path=site-config/:path*"
     },
     {
+      "source": "/api/chat/:path*",
+      "destination": "/api/index.py?path=chat/:path*"
+    },
+    {
       "source": "/api/:path*",
       "destination": "/api/index.py?path=:path*"
     }
