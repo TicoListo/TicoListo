@@ -137,7 +137,6 @@ const serviceOfficialDetails = {
   "lost-id": ["Tribunal Supremo de Elecciones", "https://www.tse.go.cr"],
   "passport-renewal": ["Migración y Extranjería", "https://www.migracion.go.cr"],
   "minor-passport": ["Migración y Extranjería", "https://www.migracion.go.cr"],
-  "registry-certificate": ["Registro Nacional", "https://www.rnpdigital.com"],
   "buy-property": ["Registro Nacional / municipalidad / notario", "https://www.rnpdigital.com"],
   "sell-property": ["Registro Nacional / notario", "https://www.rnpdigital.com"],
   "short-stay-rental": ["Municipalidad / ICT / Hacienda", "https://www.ict.go.cr"],
