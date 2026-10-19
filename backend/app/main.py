@@ -1131,8 +1131,8 @@ async def get_request(request_id: int, session: AsyncSession = Depends(get_sessi
 @app.get("/chat/{chat_token}", response_model=list[ChatMessageOut])
 async def public_chat_messages(
     chat_token: str,
-    since_id: int = Query(default=0, ge=0),
     response: Response,
+    since_id: int = Query(default=0, ge=0),
     session: AsyncSession = Depends(get_session),
 ) -> list[RequestMessage]:
     response.headers["Cache-Control"] = "no-store, max-age=0"
