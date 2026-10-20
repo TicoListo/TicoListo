@@ -60,6 +60,15 @@ const smartMatches = [
   ["marchamo", "marchamo"], ["incapacidad", "ccss-sick-leave"], ["casarme", "civil-marriage"],
 ];
 
+const assistantIntentMatches = [
+  { slug: "sell-property", terms: ["vender una propiedad", "vender propiedad", "quiero vender mi casa", "quiero vender un terreno", "poner una propiedad en venta"] },
+  { slug: "buy-property", terms: ["comprar una propiedad", "comprar propiedad", "quiero comprar una casa", "comprar un terreno", "buscar una casa"] },
+  { slug: "short-stay-rental", terms: ["alquiler de corta estancia", "alquiler vacacional", "airbnb", "renta corta"] },
+  { slug: "export-vehicle", terms: ["sacar el carro del pais", "sacar el carro del país", "sacar un vehiculo del pais", "sacar un vehículo del país", "exportar mi carro", "exportar un vehiculo"] },
+  { slug: "renew-drivers-license", terms: ["renovar la licencia", "renovar licencia", "licencia de conducir"] },
+  { slug: "passport-renewal", terms: ["sacar pasaporte", "renovar pasaporte", "pasaporte"] },
+];
+
 const searchAliases = {
   licencia: ["licencias", "conducir", "manejar", "carne", "carnet", "license", "driver", "driving", "drivers"],
   pasaporte: ["viajar", "migracion", "migración", "extranjero", "salir del pais", "salir del país", "passport", "travel", "abroad", "immigration"],
@@ -104,6 +113,22 @@ function getServiceSearchText(service, categoryLabels) {
   ].filter(Boolean).join(" "));
 }
 
+function levenshteinDistance(first, second) {
+  const previous = Array.from({ length: second.length + 1 }, (_, index) => index);
+  for (let row = 1; row <= first.length; row += 1) {
+    let diagonal = previous[0];
+    previous[0] = row;
+    for (let column = 1; column <= second.length; column += 1) {
+      const above = previous[column];
+      previous[column] = first[row - 1] === second[column - 1]
+        ? diagonal
+        : Math.min(diagonal + 1, previous[column] + 1, previous[column - 1] + 1);
+      diagonal = above;
+    }
+  }
+  return previous[second.length];
+}
+
 function scoreServiceSearch(service, search, categoryLabels) {
   const searchText = getServiceSearchText(service, categoryLabels);
   if (!search.phrase) return 0;
@@ -111,7 +136,10 @@ function scoreServiceSearch(service, search, categoryLabels) {
   let score = searchText.includes(search.phrase) ? 100 : 0;
   search.terms.forEach((term) => {
     const matchesWord = [...searchWords].some((word) =>
-      word === term || (term.length >= 4 && word.startsWith(term)) || (word.length >= 4 && term.startsWith(word))
+      word === term
+      || (term.length >= 4 && word.startsWith(term))
+      || (word.length >= 4 && term.startsWith(word))
+      || (term.length >= 5 && word.length >= 5 && levenshteinDistance(word, term) <= (term.length > 7 ? 2 : 1))
     );
     if (matchesWord) score += searchText.startsWith(term) ? 12 : 8;
   });
@@ -348,6 +376,10 @@ function getInstructions(service) {
   };
 }
 
+function isOfficialPortal(url = "") {
+  return /(?:\.go\.cr|gob\.cr|ccss\.sa\.cr|rnpdigital\.com|dekra\.cr)(?:\/|$)/i.test(url);
+}
+
 export default function Home() {
   const [catalog, setCatalog] = useState(fallbackServices);
   const [language, setLanguage] = useState("es");
@@ -405,6 +437,9 @@ export default function Home() {
   }
 
   function openService(service) {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 600px)").matches) {
+      setAssistantOpen(false);
+    }
     setSelected(service);
     if (!service?.slug || typeof window === "undefined") return;
     setRecentServiceSlugs((current) => {
@@ -676,6 +711,10 @@ export default function Home() {
     [catalog, recentServiceSlugs],
   );
   const smartSuggestion = smartMatches.find(([term]) => search.phrase.includes(normalizeSearchText(term)));
+  const findAssistantIntent = (message) => {
+    const normalized = normalizeSearchText(message);
+    return assistantIntentMatches.find(({ terms }) => terms.some((term) => normalized.includes(normalizeSearchText(term))));
+  };
 
   useEffect(() => {
     setServicePage(1);
@@ -686,6 +725,9 @@ export default function Home() {
   }, [pageCount, servicePage]);
 
   function openAssistant() {
+    if (typeof window !== "undefined" && window.matchMedia("(max-width: 600px)").matches) {
+      setSelected(null);
+    }
     setAssistantOpen(true);
     setAssistantMessages((messages) => messages.length ? messages : [{
       role: "bot",
@@ -706,24 +748,47 @@ export default function Home() {
     const trimmed = message.trim();
     if (!trimmed) return;
     const assistantSearch = getSearchTerms(trimmed);
+    const intent = findAssistantIntent(trimmed);
+    const intentService = intent ? catalog.find((service) => service.slug === intent.slug) : null;
     const recommendations = catalog
       .map((service, index) => ({ service, index, score: scoreServiceSearch(service, assistantSearch, categoryLabels) }))
       .filter(({ score }) => score > 0)
       .sort((a, b) => b.score - a.score || a.index - b.index)
       .slice(0, 3)
       .map(({ service }) => service);
-    const top = recommendations[0];
+    if (intentService && !recommendations.some((service) => service.slug === intentService.slug)) {
+      recommendations.unshift(intentService);
+    }
+    const rankedRecommendations = recommendations.slice(0, 3);
+    const top = intentService || rankedRecommendations[0];
+    const previousRecommendation = [...assistantMessages].reverse().find((item) => item.role === "bot" && item.recommendations?.length)?.recommendations?.[0];
+    const followUpService = previousRecommendation && /(requisito|document|paso|cómo|como|acompaña|ayuda)/i.test(trimmed)
+      ? previousRecommendation
+      : null;
+    const displayedRecommendations = followUpService ? [followUpService] : rankedRecommendations;
+    const followUpDocuments = followUpService && propertyListingSlugs.has(followUpService.slug)
+      ? "tu identificación y los documentos de la propiedad"
+      : "tu identificación y los documentos que correspondan";
+    const intentQuestion = intentService?.slug === "sell-property"
+      ? (es ? "¿La propiedad es una casa, terreno o local?" : "Is the property a house, land, or a commercial space?")
+      : intentService?.slug === "export-vehicle"
+        ? (es ? "¿El vehículo ya está a tu nombre y hacia qué país lo llevarías?" : "Is the vehicle already registered in your name, and which country are you taking it to?")
+        : "";
     const response = top
       ? (es
-        ? `Por lo que describes, empezaría con "${top.es || top.title}". ${top.provider ? `La institución relacionada es ${top.provider}.` : ""} También encontré otras opciones que pueden servirte.`
-        : `Based on what you described, I would start with "${top.title || top.es}". ${top.provider ? `The related institution is ${top.provider}.` : ""} I also found other options that may help.`)
+        ? followUpService
+          ? `Para "${followUpService.es || followUpService.title}" prepara ${followUpDocuments} y confirma los requisitos vigentes con la institución responsable. Puedes abrir la guía completa para ver los pasos y solicitar acompañamiento.`
+          : `Sí, te puedo orientar. Para "${trimmed.toLowerCase()}" empezaría con "${top.es || top.title}". ${top.provider ? `La institución relacionada es ${top.provider}.` : ""} ${intentQuestion || (es ? "¿Quieres que te muestre los requisitos y los pasos, o prefieres solicitar acompañamiento?" : "Would you like the requirements and steps, or would you rather request assistance?")}`
+        : followUpService
+          ? `For "${followUpService.title || followUpService.es}", prepare your ID and property documents, then confirm the current requirements with the responsible institution. Open the full guide to see the steps or request assistance.`
+          : `Yes, I can help. For "${trimmed.toLowerCase()}" I would start with "${top.title || top.es}". ${top.provider ? `The related institution is ${top.provider}.` : ""} ${intentQuestion || "Would you like the requirements and steps, or would you rather request assistance?"}`)
       : (es
         ? "No encontré una coincidencia exacta todavía. Prueba con palabras como licencia, pasaporte, cédula, carro, propiedad, negocio o Hacienda."
         : "I could not find an exact match yet. Try words like license, passport, ID, car, property, business or taxes.");
     setAssistantMessages((messages) => [
       ...messages,
       { role: "user", text: trimmed },
-      { role: "bot", text: response, recommendations },
+      { role: "bot", text: response, recommendations: displayedRecommendations },
     ]);
     setAssistantDraft("");
   }
@@ -917,8 +982,8 @@ export default function Home() {
       <section className="popular-section" aria-labelledby="popular-title">
         <div className="section-heading"><div><p className="eyebrow">{es ? "LO MÁS BUSCADO" : "POPULAR SERVICES"}</p><h2 id="popular-title">{es ? "Trámites que más consultan" : "Most requested services"}</h2></div><span>{es ? "Accesos rápidos para empezar" : "Quick ways to get started"}</span></div>
         <div className="popular-grid">
-          {catalog.filter((service, index) => popularServiceSlugs.includes(service.slug) || (!service.slug && index < 4)).slice(0, 4).map((service) => (
-            <button className="popular-card" key={service.slug} onClick={() => openService(service)}><span className="row-icon">{service.icon}</span><span><strong>{es ? service.es : service.title}</strong><small>{service.provider || service.location}</small></span><span className="row-arrow">›</span></button>
+          {catalog.filter((service, index) => popularServiceSlugs.includes(service.slug) || (!service.slug && index < 4)).slice(0, 4).map((service, index) => (
+            <button className="popular-card" key={service.slug || `${service.category || "popular"}-${index}`} onClick={() => openService(service)}><span className="row-icon">{service.icon}</span><span><strong>{es ? service.es : service.title}</strong><small>{service.provider || service.location}</small></span><span className="row-arrow">›</span></button>
           ))}
         </div>
       </section>
@@ -958,8 +1023,8 @@ export default function Home() {
             </div>
           )}
           <div className={`service-list ${categoryFilterKey === category ? "is-filtered" : ""}`} key={categoryFilterKey}>
-            {visibleServices.map((service) => (
-              <button className="service-row" key={service.slug || service.category} onClick={() => openService(service)}>
+            {visibleServices.map((service, index) => (
+              <button className="service-row" key={service.slug || `${service.category}-${index}`} onClick={() => openService(service)}>
                 <span className="row-icon">{service.icon}</span>
                 <span className="row-copy"><strong>{es ? service.es : service.title}</strong><small>{service.provider || service.location}</small></span>
                 <span className="row-arrow">›</span>
@@ -1038,6 +1103,7 @@ export default function Home() {
         <button className="assistant-close" onClick={() => setAssistantOpen(false)} aria-label={es ? "Cerrar asistente" : "Close assistant"}>×</button>
         <div className="assistant-header"><span className="assistant-avatar">✦</span><div><strong>{es ? "Asistente de trámites" : "Services assistant"}</strong><small>{es ? "Orientación inteligente" : "Smart guidance"}</small></div></div>
         <div className="assistant-messages" aria-live="polite">
+          {assistantMessages.length === 0 && <div className="assistant-message bot"><p>{es ? "Cuéntame qué necesitas hacer. Por ejemplo: “Quisiera vender una propiedad” o “quiero sacar mi carro del país”." : "Tell me what you need to do. For example: “I want to sell a property” or “I want to export my car”."}</p></div>}
           {assistantMessages.map((message, index) => <div className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}><p>{message.text}</p>{message.recommendations?.length > 0 && <div className="assistant-recommendations">{message.recommendations.map((service) => <button type="button" key={service.slug} onClick={() => openService(service)}><span>{service.icon}</span><strong>{es ? service.es : service.title}</strong><span>›</span></button>)}</div>}</div>)}
         </div>
         <div className="assistant-quick-actions">{(es ? ["Licencia", "Pasaporte", "Cédula", "Propiedad"] : ["Driver's license", "Passport", "ID", "Property"]).map((suggestion) => <button type="button" key={suggestion} onClick={() => askAssistant(suggestion)}>{suggestion}</button>)}</div>
@@ -1075,7 +1141,7 @@ export default function Home() {
           )}
         </section>
       </div>}
-      {selected && <div className="modal-backdrop" onClick={() => setSelected(null)}><div className="modal service-modal" onClick={(event) => event.stopPropagation()}><button className="close" onClick={() => setSelected(null)}>×</button><div className="service-modal-kicker">{es ? "GUÍA DEL TRÁMITE" : "SERVICE GUIDE"}</div><span className="service-icon">{selected.icon}</span><h2>{es ? selected.es : selected.title}</h2><p>{selected.text}</p><div className="service-actions"><button type="button" className={`service-action-button${favoriteServiceSlugs.includes(selected.slug) ? " is-favorite" : ""}`} onClick={() => toggleFavorite(selected)} aria-pressed={favoriteServiceSlugs.includes(selected.slug)}>{favoriteServiceSlugs.includes(selected.slug) ? "★" : "☆"} {es ? "Guardar" : "Save"}</button>      <button type="button" className="service-action-button" onClick={shareSelectedService}>↗ {es ? "Compartir" : "Share"}</button><button type="button" className="service-action-button whatsapp-action" onClick={shareOnWhatsApp}>◉ WhatsApp</button>{shareStatus && <span className="share-status" role="status">{shareStatus}</span>}</div><div className="service-trust"><span>✓ {es ? "Fuente oficial" : "Official source"}</span><span>{es ? "Actualizado para orientarte" : "Updated guidance"}</span></div><p className="service-location">{es ? "Institución responsable:" : "Responsible institution:"} {selectedInstructions.institution}</p>      <p><a className="service-language-link" href={`${es ? "/es/servicios/" + (selected.slug_es || selected.slug) : "/en/services/" + (selected.slug_en || selected.slug)}`} target="_blank" rel="noopener noreferrer">{es ? "Abrir página completa de este servicio →" : "Open full service page →"}</a></p>{selectedInstructions.hasWebsite && <section className="modal-guide self-service"><h3>✓ {es ? "OPCIÓN 1: HACERLO TÚ MISMO" : "OPTION 1: DO IT YOURSELF"}</h3><p><strong>{es ? "Prepara lo esencial antes de comenzar" : "Prepare the essentials before starting"}</strong></p><div className="requirements-list">{requirementItems.map((item, index) => <button type="button" className={`requirement-item${completedRequirements.includes(index) ? " is-complete" : ""}`} key={item} onClick={() => setCompletedRequirements((items) => items.includes(index) ? items.filter((itemIndex) => itemIndex !== index) : [...items, index])}><span aria-hidden="true">{completedRequirements.includes(index) ? "✓" : "○"}</span>{item}</button>)}</div><ol>{selectedInstructions.steps.map((step) => <li key={step.es}>{step[es ? "es" : "en"]}</li>)}</ol><div className="official-links">{selectedInstructions.sources.map(([sourceName, sourceUrl]) => <a className="official-link" href={sourceUrl} target="_blank" rel="noopener noreferrer" key={sourceUrl}><span className="official-link-icon">↗</span><span className="official-link-copy"><strong>{es ? "Ir al sitio oficial" : "Open official website"}</strong><small>{sourceName}</small></span><span className="official-link-arrow" aria-hidden="true">→</span></a>)}</div></section>}<section className="modal-guide delegate-service"><h3>★ {es ? "¿PREFIERES NO HACERLO SOLO?" : "PREFER NOT TO DO IT ALONE?"}</h3><p>{es ? "Te acompañamos con requisitos, documentos y seguimiento hasta completar el trámite." : "We guide you through requirements, documents, and follow-up until the service is complete."}</p><div className="assistance-benefits"><span>✓ {es ? "Orientación personalizada" : "Personalized guidance"}</span><span>✓ {es ? "Revisión de documentos" : "Document review"}</span><span>✓ {es ? "Seguimiento del proceso" : "Process follow-up"}</span></div><button className="delegate-button" onClick={() => { setContactNote(es ? `Necesito ayuda con el trámite: ${selected.es || selected.title}. Quiero conocer los requisitos y el costo de la asistencia.` : `I need help with this service: ${selected.title || selected.es}. I would like to know the requirements and assistance cost.`); setSelected(null); document.getElementById("assistance").scrollIntoView({ behavior: "smooth" }); }}><span className="delegate-button-icon">→</span><span className="delegate-button-copy"><strong>{es ? "Solicitar acompañamiento" : "Request assistance"}</strong><small>{es ? "Habla con el equipo de TicoListo" : "Talk to the TicoListo team"}</small></span><span className="delegate-button-arrow" aria-hidden="true">→</span></button></section></div></div>}
+      {selected && <div className="modal-backdrop" onClick={() => setSelected(null)}><div className="modal service-modal" onClick={(event) => event.stopPropagation()}><button className="close" onClick={() => setSelected(null)}>×</button><button className="mobile-assistant-back" type="button" onClick={() => { setSelected(null); openAssistant(); }}>← {es ? "Volver al asistente" : "Back to assistant"}</button><div className="service-modal-kicker">{es ? "GUÍA DEL TRÁMITE" : "SERVICE GUIDE"}</div><span className="service-icon">{selected.icon}</span><h2>{es ? selected.es : selected.title}</h2><p>{selected.text}</p><div className="service-actions"><button type="button" className={`service-action-button${favoriteServiceSlugs.includes(selected.slug) ? " is-favorite" : ""}`} onClick={() => toggleFavorite(selected)} aria-pressed={favoriteServiceSlugs.includes(selected.slug)}>{favoriteServiceSlugs.includes(selected.slug) ? "★" : "☆"} {es ? "Guardar" : "Save"}</button>      <button type="button" className="service-action-button" onClick={shareSelectedService}>↗ {es ? "Compartir" : "Share"}</button><button type="button" className="service-action-button whatsapp-action" onClick={shareOnWhatsApp}>◉ WhatsApp</button>{shareStatus && <span className="share-status" role="status">{shareStatus}</span>}</div><div className="service-trust"><span>✓ {es ? (isOfficialPortal(selectedInstructions.url) ? "Enlace institucional" : "Referencia para orientarte") : (isOfficialPortal(selectedInstructions.url) ? "Institutional link" : "Reference for guidance")}</span><span>{es ? "Verifica requisitos vigentes" : "Verify current requirements"}</span></div><p className="service-location">{es ? "Institución responsable:" : "Responsible institution:"} {selectedInstructions.institution}</p>      <p><a className="service-language-link" href={`${es ? "/es/servicios/" + (selected.slug_es || selected.slug) : "/en/services/" + (selected.slug_en || selected.slug)}`} target="_blank" rel="noopener noreferrer">{es ? "Abrir página completa de este servicio →" : "Open full service page →"}</a></p>{selectedInstructions.hasWebsite && <section className="modal-guide self-service"><h3>✓ {es ? "OPCIÓN 1: HACERLO TÚ MISMO" : "OPTION 1: DO IT YOURSELF"}</h3><p><strong>{es ? "Prepara lo esencial antes de comenzar" : "Prepare the essentials before starting"}</strong></p><div className="requirements-list">{requirementItems.map((item, index) => <button type="button" className={`requirement-item${completedRequirements.includes(index) ? " is-complete" : ""}`} key={item} onClick={() => setCompletedRequirements((items) => items.includes(index) ? items.filter((itemIndex) => itemIndex !== index) : [...items, index])}><span aria-hidden="true">{completedRequirements.includes(index) ? "✓" : "○"}</span>{item}</button>)}</div><ol>{selectedInstructions.steps.map((step) => <li key={step.es}>{step[es ? "es" : "en"]}</li>)}</ol><div className="official-links">{selectedInstructions.sources.map(([sourceName, sourceUrl]) => <a className="official-link" href={sourceUrl} target="_blank" rel="noopener noreferrer" key={sourceUrl}><span className="official-link-icon">↗</span><span className="official-link-copy"><strong>{isOfficialPortal(sourceUrl) ? (es ? "Ir al sitio oficial" : "Open official website") : (es ? "Ver portal relacionado" : "View related portal")}</strong><small>{sourceName}</small></span><span className="official-link-arrow" aria-hidden="true">→</span></a>)}</div></section>}<section className="modal-guide delegate-service"><h3>★ {es ? "¿PREFIERES NO HACERLO SOLO?" : "PREFER NOT TO DO IT ALONE?"}</h3><p>{es ? "Te acompañamos con requisitos, documentos y seguimiento hasta completar el trámite." : "We guide you through requirements, documents, and follow-up until the service is complete."}</p><div className="assistance-benefits"><span>✓ {es ? "Orientación personalizada" : "Personalized guidance"} </span><span>✓ {es ? "Revisión de documentos" : "Document review"}</span><span>✓ {es ? "Seguimiento del proceso" : "Process follow-up"}</span></div><button className="delegate-button" onClick={() => { setContactNote(es ? `Necesito ayuda con el trámite: ${selected.es || selected.title}. Quiero conocer los requisitos y el costo de la asistencia.` : `I need help with this service: ${selected.title || selected.es}. I would like to know the requirements and assistance cost.`); setSelected(null); document.getElementById("assistance").scrollIntoView({ behavior: "smooth" }); }}><span className="delegate-button-icon">→</span><span className="delegate-button-copy"><strong>{es ? "Solicitar acompañamiento" : "Request assistance"}</strong><small>{es ? "Habla con el equipo de TicoListo" : "Talk to the TicoListo team"}</small></span><span className="delegate-button-arrow" aria-hidden="true">→</span></button></section></div></div>}
     </main>
   );
 }

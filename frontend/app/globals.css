@@ -2046,7 +2046,84 @@ main:not(.admin-page) footer .logo {
   .assistant-avatar { animation: none; }
 }
 
-/* Service detail modal */
+  /* Mobile assistant: keep the conversation readable and separated from service modals. */
+  @media (max-width: 600px) {
+    .assistant-card {
+      right: 8px;
+      bottom: 8px;
+      left: 8px;
+      width: auto;
+      max-height: min(72vh, 540px);
+      display: flex;
+      flex-direction: column;
+      padding: 14px;
+      border: 1px solid rgba(99, 91, 255, .18);
+      border-radius: 22px;
+      box-shadow: 0 18px 45px rgba(10, 37, 64, .24);
+    }
+    .assistant-close {
+      top: 12px;
+      right: 12px;
+      width: 30px;
+      height: 30px;
+    }
+    .assistant-header {
+      gap: 9px;
+      padding-right: 38px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid rgba(99, 91, 255, .1);
+    }
+    .assistant-header strong {
+      font-size: 16px;
+    }
+    .assistant-header small {
+      font-size: 11px;
+    }
+    .assistant-messages {
+      flex: 1;
+      min-height: 0;
+      max-height: min(38vh, 280px);
+      margin: 10px -2px 8px;
+      padding: 2px;
+      gap: 7px;
+    }
+    .assistant-message {
+      max-width: 94%;
+      padding: 9px 10px;
+      border-radius: 14px;
+      font-size: 12px;
+    }
+    .assistant-recommendations button {
+      min-height: 42px;
+      padding: 8px 9px;
+      font-size: 12px;
+    }
+    .assistant-quick-actions {
+      margin: 7px 0 9px;
+      padding-bottom: 2px;
+    }
+    .assistant-quick-actions button {
+      min-height: 32px;
+      padding: 6px 10px;
+    }
+    .assistant-form {
+      min-height: 46px;
+      border-radius: 14px;
+      padding: 4px 5px 4px 10px;
+    }
+    .assistant-form input {
+      font-size: 13px;
+      padding: 8px 4px;
+    }
+    .assistant-form button {
+      width: 38px;
+      height: 36px;
+      border-radius: 11px;
+      font-size: 18px;
+    }
+  }
+
+  /* Service detail modal */
 main:not(.admin-page) .modal-backdrop {
   padding: 18px;
   background: rgba(10, 37, 64, .52);
@@ -2197,6 +2274,9 @@ main:not(.admin-page) .service-modal .service-language-link:focus-visible {
   outline: 3px solid rgba(139, 92, 246, .42);
   outline-offset: 3px;
 }
+.mobile-assistant-back {
+  display: none;
+}
 @media (max-width: 600px) {
   main:not(.admin-page) .modal-backdrop { padding: 10px; }
   main:not(.admin-page) .service-modal {
@@ -2207,6 +2287,19 @@ main:not(.admin-page) .service-modal .service-language-link:focus-visible {
   }
   main:not(.admin-page) .service-modal::before { margin-bottom: 15px; }
   main:not(.admin-page) .service-modal .modal-guide { padding: 16px 14px; }
+  .mobile-assistant-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    margin: 0 0 12px;
+    padding: 5px 8px;
+    border: 1px solid rgba(99, 91, 255, .16);
+    border-radius: 999px;
+    background: rgba(239, 231, 255, .62);
+    color: #6941a5;
+    font-size: 11px;
+    font-weight: 800;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   main:not(.admin-page) .service-modal .close,
