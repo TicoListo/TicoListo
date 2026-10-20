@@ -24,6 +24,7 @@ export async function generateMetadata({ params }) {
     title: service.meta_title_en || service.name_en,
     description: service.meta_description_en || service.description_en,
     keywords: service.keywords_en,
+    robots: { index: true, follow: true },
     alternates: {
       canonical: `${siteUrl}/en/services/${service.slug_en || service.slug}`,
       languages: {

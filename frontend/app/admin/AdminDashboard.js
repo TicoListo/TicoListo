@@ -11,6 +11,7 @@ const statuses = [
   ["in_progress", "En trámite"], ["waiting_institution", "Esperando institución"],
   ["correction_required", "Requiere corrección"], ["completed", "Finalizado"],
 ];
+const filterOptions = [...statuses, ["unassigned", "Sin gestor"]];
 const statusLabels = Object.fromEntries(statuses);
 const emptyService = {
   slug_en: "", slug_es: "", category: "paperwork", name_en: "", name_es: "",
@@ -58,11 +59,18 @@ export default function AdminPage() {
     inProgress: requests.filter((item) => ["in_progress", "waiting_institution", "correction_required"].includes(item.status)).length,
     completed: requests.filter((item) => item.status === "completed").length,
   }), [requests]);
+  const priorityMetrics = useMemo(() => ({
+    newCases: requests.filter((item) => item.status === "new").length,
+    waitingDocuments: requests.filter((item) => item.status === "waiting_documents").length,
+    unassigned: requests.filter((item) => !item.assigned_to && !["completed", "cancelled"].includes(item.status)).length,
+  }), [requests]);
 
   const visibleRequests = useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
     return requests.filter((item) => {
-      const matchesFilter = filter === "all" || item.status === filter;
+      const matchesFilter = filter === "all"
+        || (filter === "unassigned" && !item.assigned_to && !["completed", "cancelled"].includes(item.status))
+        || item.status === filter;
       const searchable = [item.name, item.email, item.phone, item.category, item.province, item.location, item.description]
         .filter(Boolean)
         .join(" ")
@@ -320,7 +328,7 @@ export default function AdminPage() {
             <span aria-hidden="true">{adminDarkMode ? "☀" : "☾"}</span>
             {adminDarkMode ? "Modo claro" : "Modo oscuro"}
           </button>
-          <a href="/" className="admin-back">← Ver sitio público</a>
+          <a href="/" className="admin-back"><span className="admin-back-photo" aria-hidden="true"><img src="/tucan-hero.png" alt="" /></span><span>Ver sitio público</span><span className="admin-back-arrow" aria-hidden="true">→</span></a>
         </div>
       </div>
       {key && section !== "login" && <nav className="admin-section-nav" aria-label="Secciones administrativas">
@@ -364,11 +372,19 @@ export default function AdminPage() {
           <div className="admin-overview-card admin-overview-progress"><span>En proceso</span><strong>{dashboardMetrics.inProgress}</strong><small>En atención activa</small></div>
           <div className="admin-overview-card admin-overview-success"><span>Finalizados</span><strong>{dashboardMetrics.completed}</strong><small>Casos completados</small></div>
         </section>
+        <section className="admin-priority-panel" aria-labelledby="admin-priority-title">
+          <div className="admin-priority-heading"><div><p className="eyebrow">SIGUIENTE ACCIÓN</p><h2 id="admin-priority-title">Atención inmediata</h2><p>Accesos rápidos para ordenar los casos que requieren una respuesta.</p></div><span className="admin-priority-mark" aria-hidden="true">✦</span></div>
+          <div className="admin-priority-actions">
+            <button type="button" onClick={() => setFilter("new")}><span className="admin-priority-icon">✦</span><span><strong>Nuevas solicitudes</strong><small>{priorityMetrics.newCases} por revisar</small></span><b>→</b></button>
+            <button type="button" onClick={() => setFilter("waiting_documents")}><span className="admin-priority-icon">▣</span><span><strong>Documentos pendientes</strong><small>{priorityMetrics.waitingDocuments} necesitan seguimiento</small></span><b>→</b></button>
+            <button type="button" onClick={() => { setSearch(""); setFilter("unassigned"); }}><span className="admin-priority-icon">◎</span><span><strong>Casos sin gestor</strong><small>{priorityMetrics.unassigned} sin asignación</small></span><b>→</b></button>
+          </div>
+        </section>
         <aside className="admin-sidebar">
           <div className="admin-sidebar-head"><h2>Solicitudes</h2><span>{visibleRequests.length}</span></div>
           <label className="admin-search-label" htmlFor="admin-request-search">Buscar solicitud</label>
           <div className="admin-request-search"><span aria-hidden="true">⌕</span><input id="admin-request-search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Nombre, correo, teléfono..." /><button type="button" onClick={() => setSearch("")} disabled={!search} aria-label="Limpiar búsqueda">×</button></div>
-          <div className="admin-filters">{statuses.map(([value, label]) => <button key={value} className={filter === value ? "admin-filter active" : "admin-filter"} onClick={() => setFilter(value)}>{label}<span>{value === "all" ? requests.length : requests.filter((item) => item.status === value).length}</span></button>)}</div>
+          <div className="admin-filters">{filterOptions.map(([value, label]) => <button key={value} className={filter === value ? "admin-filter active" : "admin-filter"} onClick={() => setFilter(value)}>{label}<span>{value === "all" ? requests.length : value === "unassigned" ? priorityMetrics.unassigned : requests.filter((item) => item.status === value).length}</span></button>)}</div>
           <div className="admin-cases">
             {visibleRequests.map((item) => <button key={item.id} className={selected?.id === item.id ? "admin-case selected" : "admin-case"} onClick={() => setSelectedId(item.id)}><strong>#{item.id} · {item.name}</strong><span>{item.category}</span><small>{statusLabels[item.status]}</small></button>)}
             {!visibleRequests.length && <p>No hay solicitudes en este estado.</p>}

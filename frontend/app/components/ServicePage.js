@@ -26,6 +26,7 @@ function parseFaq(value) {
 export default function ServicePage({ service, language }) {
   const [checkedSteps, setCheckedSteps] = useState([]);
   const [shareMessage, setShareMessage] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
   const isSpanish = language === "es";
   const name = isSpanish ? service.name_es : service.name_en;
   const description = isSpanish ? service.description_es : service.description_en;
@@ -57,6 +58,10 @@ export default function ServicePage({ service, language }) {
   ];
   const slug = isSpanish ? service.slug_es || service.slug : service.slug_en || service.slug;
   const officialUrl = propertyServiceSlugs.has(service.slug) ? propertyListingUrl : service.official_url;
+  const whatsappNumber = service.whatsapp ? String(service.whatsapp).replace(/[^\d]/g, "") : "";
+  const whatsappUrl = whatsappNumber
+    ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(isSpanish ? `Hola, necesito ayuda con el trámite de ${name}.` : `Hello, I need help with ${name}.`)}`
+    : null;
   const basePath = isSpanish ? `/es/servicios/${slug}` : `/en/services/${slug}`;
   const alternatePath = isSpanish
     ? `/en/services/${service.slug_en || service.slug}`
@@ -131,18 +136,29 @@ export default function ServicePage({ service, language }) {
             {summary.map((item) => <div className="service-summary-item" key={item.label}><span>{item.label}</span><strong>{item.value || item.fallback}</strong></div>)}
           </div>
         </section>
-        {content && <section className="guide-section"><h2>{isSpanish ? "Información del servicio" : "Service information"}</h2><p>{content}</p></section>}
-        {requirements && <section className="guide-section"><h2>{isSpanish ? "Requisitos y documentos necesarios" : "Requirements and documents"}</h2><ul className="service-requirements">{requirementItems.map((item) => <li key={item}>{item}</li>)}</ul></section>}
+        <div className="service-progress" aria-live="polite">
+          <span>{isSpanish ? "Progreso de la guía" : "Guide progress"}</span>
+          <strong>{checkedSteps.length}/{stepsForSchema.length} {isSpanish ? "pasos" : "steps"}</strong>
+          <div className="service-progress-track"><span style={{ width: `${Math.round((checkedSteps.length / stepsForSchema.length) * 100)}%` }} /></div>
+        </div>
+        {(content || requirements || faq.length > 0) && <details className="service-extra" open={showDetails} onToggle={(event) => setShowDetails(event.currentTarget.open)}>
+          <summary>{isSpanish ? "Ver información, requisitos y preguntas" : "View information, requirements and questions"}</summary>
+          {content && <section className="guide-section"><h2>{isSpanish ? "Información del servicio" : "Service information"}</h2><p>{content}</p></section>}
+          {requirements && <section className="guide-section"><h2>{isSpanish ? "Requisitos y documentos necesarios" : "Requirements and documents"}</h2><ul className="service-requirements">{requirementItems.map((item) => <li key={item}>{item}</li>)}</ul></section>}
+          {faq.length > 0 && <section className="guide-section"><h2>{isSpanish ? "Preguntas frecuentes" : "Frequently asked questions"}</h2>{faq.map((item) => <details key={item.question}><summary>{item.question}</summary><p>{item.answer}</p></details>)}</section>}
+        </details>}
         <section className="guide-section">
           <h2>{isSpanish ? "Cómo hacerlo por tu cuenta" : "How to do it yourself"}</h2>
           <ol className="service-steps">{stepsForSchema.map((step, index) => <li key={step}><label><input type="checkbox" checked={checkedSteps.includes(index)} onChange={() => toggleStep(index)} /> <span className={checkedSteps.includes(index) ? "is-complete" : ""}>{step}</span></label></li>)}</ol>
           {officialUrl ? <a className="primary-button" href={officialUrl} target="_blank" rel="noreferrer">{isSpanish ? "Ir al sitio oficial ↗" : "Open official website ↗"}</a> : <p className="service-note">{isSpanish ? "Revisa la información oficial de la institución responsable." : "Check the responsible institution’s official information."}</p>}
         </section>
-        {faq.length > 0 && <section className="guide-section"><h2>{isSpanish ? "Preguntas frecuentes" : "Frequently asked questions"}</h2>{faq.map((item) => <details key={item.question}><summary>{item.question}</summary><p>{item.answer}</p></details>)}</section>}
         <section className="guide-cta">
           <h2>{isSpanish ? "¿Prefieres que lo hagamos por ti?" : "Would you rather have our help?"}</h2>
           <p>{isSpanish ? "Nuestro equipo puede acompañarte y dar seguimiento al proceso." : "Our team can guide you and follow up on the process."}</p>
-          <Link href="/#contacto" className="primary-button">{isSpanish ? "Contactar a un gestor" : "Contact a specialist"}</Link>
+          <div className="service-cta-actions">
+            <Link href="/#contacto" className="primary-button">{isSpanish ? "Contactar a un gestor" : "Contact a specialist"}</Link>
+            {whatsappUrl && <a className="whatsapp-button" href={whatsappUrl} target="_blank" rel="noreferrer">◉ WhatsApp</a>}
+          </div>
         </section>
       </article>
       {jsonLd.map((item) => <script key={item["@type"]} type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(item) }} />)}
